@@ -1,0 +1,192 @@
+generator client {
+   provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  AGILITY_EMPLOYEE
+  LYF_EMPLOYEE
+}
+
+enum LeaveType {
+  PAID
+  UNPAID
+  SICK
+  CASUAL
+  WFH   // FIX ADDED
+}
+enum ReimbursementStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id             String        @id @default(uuid())
+  email          String        @unique
+  password       String
+  firstName      String
+  lastName       String?
+  role           Role          @default(AGILITY_EMPLOYEE)
+  isActive       Boolean       @default(true)
+
+  // Department relation (employee belongs to a department)
+  departmentId   String?
+  department     Department?   @relation("DepartmentUsers", fields: [departmentId], references: [id])
+
+  // If user is manager of a department
+  managedDept    Department?   @relation("DepartmentManager")
+
+  position       String?
+  salary         Float?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  attendances    Attendance[]
+  leaves         Leave[]
+  approvals      Leave[]       @relation("LeaveApprover") // user approving leaves
+
+  payrolls       Payroll[]
+  notifications  Notification[]
+  refreshTokens  RefreshToken[]
+  reimbursements Reimbursement[]
+
+  @@map("users")
+}
+
+model Department {
+  id        String    @id @default(uuid())
+  name      String    @unique
+
+  // Manager of department
+  managerId String?    @unique
+  manager   User?      @relation("DepartmentManager", fields: [managerId], references: [id],  onDelete: SetNull)
+
+  // All users under this department
+  users     User[]     @relation("DepartmentUsers")
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("departments")
+}
+
+model Attendance {
+  id         String    @id @default(uuid())
+  user       User      @relation(fields: [userId], references: [id])
+  userId     String
+  date       DateTime
+  checkIn    DateTime?
+  checkOut   DateTime?
+  status     String
+  note       String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId, date])
+  @@map("attendances")
+}
+
+model Leave {
+  id          String    @id @default(uuid())
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+
+  type        LeaveType
+  startDate   DateTime
+  endDate     DateTime
+  reason      String?
+  status      String    @default("PENDING")
+
+  approverId  String?
+  approver    User?     @relation("LeaveApprover", fields: [approverId], references: [id])
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, startDate, endDate])
+  @@map("leaves")
+}
+
+model Payroll {
+  id           String    @id @default(uuid())
+  user         User      @relation(fields: [userId], references: [id])
+  userId       String
+  salaryMonth  DateTime
+  baseSalary   Float
+  bonus        Float      @default(0)
+  deductions   Float      @default(0)
+  netSalary    Float
+  slipUrl      String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([userId, salaryMonth])
+  @@map("payrolls")
+}
+
+model Reimbursement {
+  id          String               @id @default(uuid())
+  userId      String
+  user        User                 @relation(fields: [userId], references: [id])
+
+  title       String
+  description String?
+  totalAmount Float
+
+  status      ReimbursementStatus  @default(PENDING)
+
+  createdAt   DateTime             @default(now())
+
+  bills       Bill[]
+
+  // NEW FIELDS
+  isEmployeeDeleted Boolean @default(false)
+  isAdminDeleted    Boolean @default(false)
+}
+
+model Bill {
+  id              String   @id @default(uuid())
+  reimbursementId String
+  reimbursement   Reimbursement @relation(fields: [reimbursementId], references: [id])
+
+  fileUrl         String
+  amount          Float
+  note            String?
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  user      User      @relation(fields: [userId], references: [id])
+  userId    String
+
+  title     String
+  body      String
+
+  isRead    Boolean   @default(false)
+
+  /// NEW FIELD → Track which employees have read the notification
+  readByIds String[]  @default([])
+
+  meta      Json?
+  createdAt DateTime  @default(now())
+
+  @@map("notifications")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  token      String    @unique
+  user       User      @relation(fields: [userId], references: [id])
+  userId     String
+  revoked    Boolean   @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+
+  @@map("refresh_tokens")
+}

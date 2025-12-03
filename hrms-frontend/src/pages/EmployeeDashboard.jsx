@@ -1,0 +1,410 @@
+// ====================== FULL UPDATED Dashboard with WFH Box + Calendar Color ======================
+
+import React, { useEffect, useMemo, useState } from "react";
+import api from "../api/axios";
+import { Line } from "react-chartjs-2";
+import clsx from "clsx";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import { FiRefreshCw, FiDownload, FiBell } from "react-icons/fi";
+import useAuthStore from "../stores/authstore";
+import { useNavigate } from "react-router-dom";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Tooltip,
+  Legend
+);
+
+export default function EmployeeDashboard() {
+  const user = useAuthStore((s) => s.user);
+
+  const [data, setData] = useState(null);
+  const [payrolls, setPayrolls] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [payrollLoading, setPayrollLoading] = useState(false);
+  const [message, setMessage] = useState(null);
+  const navigate = useNavigate();
+
+  /* ======================================================================================
+     ATTENDANCE CALENDAR WITH WFH COLOR
+  ====================================================================================== */
+// Small Monthly Attendance Calendar (Dashboard)
+// Small Monthly Attendance Calendar (Dashboard)
+const SmallMonthCalendar = ({ attendance = [] }) => {
+  const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+
+  const attMap = {};
+  attendance.forEach((a) => {
+    const iso =
+      typeof a.date === "string"
+        ? a.date.slice(0, 10)
+        : new Date(a.date).toLocaleDateString("en-CA");
+
+    attMap[iso] = {
+      present: !!a.checkIn,
+      wfh: a.status === "WFH",
+      leave: a.status === "LEAVE",
+    };
+  });
+
+  const offset = (first.getDay() + 6) % 7;
+
+  const cells = [];
+  for (let i = 0; i < offset; i++) cells.push(null);
+
+  for (let d = 1; d <= last.getDate(); d++) {
+    const date = new Date(year, month, d);
+    const iso = date.toLocaleDateString("en-CA");
+    const rec = attMap[iso] || {};
+
+    cells.push({
+      day: d,
+      iso,
+      ...rec,
+      isFuture: date > now,
+      today: iso === new Date().toLocaleDateString("en-CA"),
+    });
+  }
+
+  return (
+    <div className="p-4 bg-white/80 dark:bg-gray-800/60 rounded-2xl shadow">
+      <h3 className="font-semibold mb-3">This Month Attendance</h3>
+
+      {/* Weekdays */}
+      <div className="grid grid-cols-7 text-center font-semibold text-xs mb-2">
+        {WEEKDAYS.map((d) => (
+          <div key={d} className="dark:text-gray-300">{d}</div>
+        ))}
+      </div>
+
+      {/* Days */}
+      <div className="grid grid-cols-7 gap-2 text-center text-sm">
+        {cells.map((c, idx) => {
+          if (!c)
+            return <div key={`e-${idx}`} className="p-3 rounded-lg"></div>;
+
+          let clsLight = "";
+          let clsDark = "";
+
+          // 🌞 LIGHT MODE COLORS
+          if (c.present) clsLight = "bg-green-200/40 border-green-500 text-green-700";
+          else if (c.wfh) clsLight = "bg-blue-200/40 border-blue-500 text-blue-700";
+          else if (c.leave) clsLight = "bg-yellow-200/40 border-yellow-500 text-yellow-700";
+          else if (c.isFuture) clsLight = "bg-gray-300/30 border-gray-400 text-gray-500";
+          else clsLight = "bg-red-200/40 border-red-500 text-red-700";
+
+          // 🌚 DARK MODE SOLID COLORS (visible)
+          if (c.present) clsDark = "dark:bg-green-700 dark:border-green-400 dark:text-green-100";
+          else if (c.wfh) clsDark = "dark:bg-blue-700 dark:border-blue-400 dark:text-blue-100";
+          else if (c.leave) clsDark = "dark:bg-yellow-700 dark:border-yellow-400 dark:text-yellow-100";
+          else if (c.isFuture) clsDark = "dark:bg-gray-700 dark:border-gray-500 dark:text-gray-300";
+          else clsDark = "dark:bg-red-700 dark:border-red-400 dark:text-red-100";
+
+          return (
+            <div
+              key={c.iso}
+              className={`p-2 rounded-lg border ${clsLight} ${clsDark} ${
+                c.today ? "ring-2 ring-indigo-500" : ""
+              }`}
+            >
+              {c.day}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+  /* ======================================================================================
+     LOAD DASHBOARD
+  ====================================================================================== */
+  const loadDashboard = async () => {
+    setLoading(true);
+    setData(null);
+
+    try {
+      const r = await api.get("/dashboard");
+      setData(r.data);
+    } catch {
+      setMessage({ type: "error", text: "Failed to load dashboard" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDashboard();
+  }, []);
+
+  /* Auto-hide message */
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(null), 2000);
+    return () => clearTimeout(t);
+  }, [message]);
+
+  /* ======================================================================================
+     PAYROLL FETCH
+  ====================================================================================== */
+  const fetchPayrolls = async () => {
+    try {
+      const r = await api.get("/payroll");
+      setPayrolls(r.data.payrolls || []);
+    } catch {
+      setMessage({ type: "error", text: "Failed to load payrolls." });
+    }
+  };
+
+  useEffect(() => {
+    fetchPayrolls();
+  }, []);
+
+  /* ======================================================================================
+     DOWNLOAD PDF
+  ====================================================================================== */
+  const downloadSlip = async (p) => {
+    try {
+      setPayrollLoading(true);
+
+      const r = await api.get(`/payroll/${p.id}/download`, {
+        responseType: "blob",
+      });
+
+      const blob = new Blob([r.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Salary-Slip-${p.salaryMonth}.pdf`;
+      a.click();
+
+      setMessage({ type: "success", text: "Salary slip downloaded" });
+    } catch {
+      setMessage({ type: "error", text: "Download failed" });
+    } finally {
+      setPayrollLoading(false);
+    }
+  };
+
+  /* ======================================================================================
+     ATTENDANCE TREND (Chart)
+  ====================================================================================== */
+  const attendanceLine = useMemo(() => {
+    if (!data) return null;
+
+    return {
+      labels: data.stats.attendanceTrend.map((i) =>
+        new Date(i.date).toLocaleDateString()
+      ),
+      datasets: [
+        {
+          label: "Present",
+          data: data.stats.attendanceTrend.map((i) => (i.checkIn ? 1 : 0)),
+          borderColor: "#10B981",
+          backgroundColor: "rgba(16,185,129,0.15)",
+          tension: 0.4,
+          fill: true,
+        },
+      ],
+    };
+  }, [data]);
+
+  const Skeleton = ({ className }) => (
+    <div
+      className={clsx(
+        "animate-pulse bg-gray-200/60 dark:bg-gray-700/40 rounded-md",
+        className
+      )}
+    />
+  );
+
+  const InfoBox = ({ title, subtitle, icon }) => (
+    <div className="flex items-center gap-4 p-4 bg-white/70 dark:bg-gray-800/50 rounded-2xl shadow">
+      <div className="w-12 h-12 rounded-lg bg-indigo-500 text-white flex items-center justify-center font-bold">
+        {icon}
+      </div>
+      <div>
+        <div className="text-sm text-gray-500 dark:text-gray-300">{title}</div>
+        <div className="text-xl font-semibold">{subtitle}</div>
+      </div>
+    </div>
+  );
+
+  const MessageBar = ({ msg }) => {
+    if (!msg) return null;
+
+    const color =
+      msg.type === "success"
+        ? "bg-green-50 text-green-800 border-green-200"
+        : msg.type === "error"
+        ? "bg-red-50 text-red-800 border-red-200"
+        : "bg-blue-50 text-blue-800 border-blue-200";
+
+    return (
+      <div
+        className={`fixed top-6 right-6 z-50 p-4 rounded-lg border ${color} shadow-lg`}
+      >
+        <div className="font-medium">{msg.type.toUpperCase()}</div>
+        <div className="text-sm">{msg.text}</div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="p-0 space-y-6 min-h-screen bg-gray-50 dark:bg-gray-900">
+      <MessageBar msg={message} />
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-extrabold">
+            Welcome back, {user.firstName}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Your performance overview
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={loadDashboard}
+            className="px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-lg shadow flex items-center gap-2"
+          >
+            <FiRefreshCw />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+
+          <button
+            onClick={() => navigate("/notifications")}
+            className="px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-lg shadow flex items-center gap-2"
+          >
+            <FiBell />
+            <span className="hidden sm:inline">Notifications</span>
+          </button>
+        </div>
+      </div>
+
+      {/* GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* ================= LEFT ================= */}
+        <div className="lg:col-span-8 space-y-6">
+          
+          {/* KPI ROW */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            {loading ? (
+              <>
+                <Skeleton className="h-20" />
+                <Skeleton className="h-20" />
+                <Skeleton className="h-20" />
+                <Skeleton className="h-20" />
+              </>
+            ) : (
+              <>
+                <InfoBox title="Days Present" subtitle={data.stats.presentDays} icon="✓" />
+                <InfoBox title="Total Leaves" subtitle={data.stats.totalLeaves} icon="L" />
+                <InfoBox title="Approved Leaves" subtitle={data.stats.approvedLeaves} icon="A" />
+                <InfoBox title="WFH Days" subtitle={data.stats.wfhDays || 0} icon="W" />
+              </>
+            )}
+          </div>
+
+          {/* Chart */}
+          <div className="p-4 bg-white/80 dark:bg-gray-800/50 rounded-2xl shadow">
+            <h3 className="font-semibold mb-3">Attendance Trend (7 days)</h3>
+
+            {loading ? (
+              <Skeleton className="h-40" />
+            ) : (
+              <Line
+                data={attendanceLine}
+                options={{
+                  plugins: { legend: { display: false } },
+                  scales: { y: { min: 0, max: 1 } },
+                }}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* ================= RIGHT ================= */}
+        <div className="lg:col-span-4 space-y-6">
+          
+          {/* Calendar */}
+<SmallMonthCalendar attendance={data?.stats?.attendance || []} />
+          {/* Payroll */}
+          <div className="p-4 bg-white/80 dark:bg-gray-800/50 rounded-2xl shadow">
+            <h3 className="font-semibold mb-3">Recent Payrolls</h3>
+
+            {payrollLoading ? (
+              <>
+                <Skeleton className="h-16 mb-2" />
+                <Skeleton className="h-16 mb-2" />
+              </>
+            ) : (
+              <div className="space-y-3">
+                {payrolls.slice(0, 6).map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between bg-gray-50 dark:bg-gray-900/40 p-3 rounded-lg"
+                  >
+                    <div>
+                      <div className="font-medium text-sm">
+                        {new Date(p.salaryMonth).toLocaleDateString("en-IN", {
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Net: ₹{p.netSalary}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => downloadSlip(p)}
+                      className="px-3 py-1 rounded-lg bg-white dark:bg-gray-800/60 border hover:shadow"
+                    >
+                      <FiDownload />
+                    </button>
+                  </div>
+                ))}
+
+                {payrolls.length === 0 && (
+                  <div className="text-sm text-gray-500">
+                    No payroll records found.
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={fetchPayrolls}
+              className="mt-4 w-full px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-lg"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
