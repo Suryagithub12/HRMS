@@ -216,30 +216,30 @@ const downloadSlip = async (p) => {
     };
   }, [data]);
 
-  const departmentDoughnut = useMemo(() => {
-    if (!data || !data.stats.departments) return null;
+const departmentDoughnut = useMemo(() => {
+  if (!data || !data.stats.departments) return null;
 
-    const labels = data.stats.departments.map((d) => d.name);
-    const counts = data.stats.departments.map(() => 1);
+  const labels = data.stats.departments.map((d) => d.name);
+  const counts = data.stats.departments.map((d) => d.count); // 🔥 FIXED
 
-    return {
-      labels,
-      datasets: [
-        {
-          data: counts,
-          backgroundColor: [
-            "#6366F1",
-            "#EC4899",
-            "#10B981",
-            "#F59E0B",
-            "#3B82F6",
-            "#8B5CF6",
-            "#EF4444",
-          ],
-        },
-      ],
-    };
-  }, [data]);
+  return {
+    labels,
+    datasets: [
+      {
+        data: counts,
+        backgroundColor: [
+          "#6366F1",
+          "#EC4899",
+          "#10B981",
+          "#F59E0B",
+          "#3B82F6",
+          "#8B5CF6",
+          "#EF4444",
+        ],
+      },
+    ],
+  };
+}, [data]);
 
   const payrollBar = useMemo(() => {
     if (!data) return null;
