@@ -167,13 +167,13 @@ const downloadSlip = async (p) => {
 
   // InfoBox
   const InfoBox = ({ title, subtitle, icon }) => (
-    <div className="flex items-center gap-4 p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow-sm">
-      <div className="w-12 h-12 rounded-lg bg-indigo-500 text-white flex items-center justify-center text-lg font-bold">
+    <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow-sm">
+      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-indigo-500 text-white flex items-center justify-center text-base sm:text-lg font-bold flex-shrink-0">
         {icon}
       </div>
-      <div>
-        <div className="text-xs text-gray-500">{title}</div>
-        <div className="text-xl font-semibold">{subtitle}</div>
+      <div className="min-w-0">
+        <div className="text-xs text-gray-500 truncate">{title}</div>
+        <div className="text-lg sm:text-xl font-semibold truncate">{subtitle}</div>
       </div>
     </div>
   );
@@ -191,10 +191,10 @@ const downloadSlip = async (p) => {
 
     return (
       <div
-        className={`fixed top-6 right-6 z-50 p-4 rounded-lg border ${color} shadow-lg`}
+        className={`fixed top-4 sm:top-6 right-4 sm:right-6 left-4 sm:left-auto z-50 p-3 sm:p-4 rounded-lg border ${color} shadow-lg max-w-sm`}
       >
-        <div className="font-medium">{msg.type.toUpperCase()}</div>
-        <div className="text-sm">{msg.text}</div>
+        <div className="font-medium text-sm sm:text-base">{msg.type.toUpperCase()}</div>
+        <div className="text-xs sm:text-sm">{msg.text}</div>
       </div>
     );
   };
@@ -220,7 +220,7 @@ const departmentDoughnut = useMemo(() => {
   if (!data || !data.stats.departments) return null;
 
   const labels = data.stats.departments.map((d) => d.name);
-  const counts = data.stats.departments.map((d) => d.count); // 🔥 FIXED
+  const counts = data.stats.departments.map((d) => d.count);
 
   return {
     labels,
@@ -261,72 +261,76 @@ const departmentDoughnut = useMemo(() => {
       ],
     };
   }, [data]);
+const attendanceLine = useMemo(() => {
+  if (!data || !data.stats.attendanceTrend) return null;
 
-  const attendanceLine = useMemo(() => {
-    if (!data) return null;
-    return {
-      labels: data.stats.attendanceTrend.map((i) =>
-        new Date(i.date).toLocaleDateString()
-      ),
-      datasets: [
-        {
-          label: "Present",
-          data: data.stats.attendanceTrend.map((i) => (i.checkIn ? 1 : 0)),
-          borderColor: "#10B981",
-          backgroundColor: "rgba(16,185,129,0.15)",
-          tension: 0.35,
-          fill: true,
-        },
-      ],
-    };
-  }, [data]);
+  // Group by date → count present employees
+  const grouped = {};
+
+  data.stats.attendanceTrend.forEach((a) => {
+    const date = new Date(a.date).toLocaleDateString();
+
+    if (!grouped[date]) grouped[date] = 0;
+
+    if (a.checkIn) grouped[date] += 1; // present count
+  });
+
+  const labels = Object.keys(grouped);
+  const counts = Object.values(grouped);
+
+  return {
+    labels,
+    datasets: [
+      {
+        label: "Number of Employees Present",
+        data: counts,
+        borderColor: "#3B82F6",
+        backgroundColor: "rgba(59,130,246,0.25)",
+        borderWidth: 2,
+        tension: 0.35,
+        fill: true,
+      },
+    ],
+  };
+}, [data]);
   // UI START
   return (
-    <div className="p-0 space-y-6 min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6 min-h-screen bg-gray-50 dark:bg-gray-900">
 
       <MessageBar msg={message} />
 
       {/* HEADER */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-extrabold">Admin Console</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <h2 className="text-2xl sm:text-3xl font-extrabold">Admin Console</h2>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             Company-wide insights
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={loadDashboard}
-            className="px-3 py-2 bg-white/70 dark:bg-gray-800/60 rounded-lg shadow flex items-center gap-2"
+            className="px-3 py-2 bg-white/70 dark:bg-gray-800/60 rounded-lg shadow flex items-center gap-2 text-sm"
           >
-            <FiRefreshCw /> Refresh
+            <FiRefreshCw className="text-base" /> <span className="hidden sm:inline">Refresh</span>
           </button>
-
-          {/* <button
-            disabled={generating}
-            onClick={generatePayroll}
-            className="px-3 py-2 bg-indigo-600 text-white rounded-lg shadow flex items-center gap-2"
-          >
-            <FiPlus />
-            {generating ? "Generating..." : "Generate Payroll"}
-          </button> */}
         </div>
       </div>
 
       {/* GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
 
         {/* LEFT SECTION */}
-        <div className="lg:col-span-8 space-y-6">
+        <div className="lg:col-span-8 space-y-4 sm:space-y-6">
 
           {/* KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             {!data ? (
               <>
-                <Skeleton className="h-20" />
-                <Skeleton className="h-20" />
-                <Skeleton className="h-20" />
+                <Skeleton className="h-16 sm:h-20" />
+                <Skeleton className="h-16 sm:h-20" />
+                <Skeleton className="h-16 sm:h-20" />
               </>
             ) : (
               <>
@@ -350,55 +354,60 @@ const departmentDoughnut = useMemo(() => {
           </div>
 
           {/* CHARTS ROW */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
 
             {/* Company Distribution */}
-            <div className="p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
-              <h3 className="font-semibold mb-3">Employees</h3>
+            <div className="p-3 sm:p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
+              <h3 className="font-semibold mb-3 text-sm sm:text-base">Employees</h3>
               {!data ? (
-                <Skeleton className="h-48" />
+                <Skeleton className="h-40 sm:h-48" />
               ) : (
-                <Doughnut data={companyDoughnut} />
+                <div className="h-40 sm:h-48 flex items-center justify-center">
+                  <Doughnut data={companyDoughnut} options={{ maintainAspectRatio: false }} />
+                </div>
               )}
             </div>
 
             {/* Department Distribution (Pie Chart) */}
-            <div
-              className="p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow"
-              style={{ height: "360px" }}
-            >
-              <h3 className="font-semibold mb-3">Departments</h3>
+            <div className="p-3 sm:p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
+              <h3 className="font-semibold mb-3 text-sm sm:text-base">Departments</h3>
 
               {!data ? (
-                <Skeleton className="h-48" />
+                <Skeleton className="h-40 sm:h-48" />
               ) : (
-                <Pie
-                  data={departmentDoughnut}
-                  options={{}}
-                />
+                <div className="h-40 sm:h-48 flex items-center justify-center">
+                  <Pie
+                    data={departmentDoughnut}
+                    options={{ maintainAspectRatio: false }}
+                  />
+                </div>
               )}
             </div>
 
           </div>
 
           {/* PAYROLL SNAPSHOT */}
-          <div className="p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
-            <h3 className="font-semibold mb-3">Payroll Snapshot</h3>
+          <div className="p-3 sm:p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
+            <h3 className="font-semibold mb-3 text-sm sm:text-base">Payroll Snapshot</h3>
             {!data ? (
-              <Skeleton className="h-48" />
+              <Skeleton className="h-40 sm:h-48" />
             ) : (
-              <Bar
-                data={payrollBar}
-                options={{
-                  plugins: { legend: { display: false } },
-                }}
-              />
+              <div className="h-40 sm:h-64">
+                <Bar
+                  data={payrollBar}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                  }}
+                />
+              </div>
             )}
           </div>
           {/* LEAVE + WFH PANEL */}
-          <div className="p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow space-y-5">
+          <div className="p-3 sm:p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow space-y-4 sm:space-y-5">
 
-            <h3 className="font-semibold text-lg">People on Leave </h3>
+            <h3 className="font-semibold text-base sm:text-lg">People on Leave </h3>
 
             {!data ? (
               <>
@@ -410,21 +419,21 @@ const departmentDoughnut = useMemo(() => {
               <>
                 {/* ON LEAVE LIST */}
 <div>
-  <h4 className="text-sm font-semibold text-yellow-600 mb-2">🟡 On Leave</h4>
+  <h4 className="text-xs sm:text-sm font-semibold text-yellow-600 mb-2">🟡 On Leave</h4>
 
   {(!data.stats.leavesToday || data.stats.leavesToday.length === 0) && (
     <div className="text-xs text-gray-500">No one is on leave today.</div>
   )}
 
   {data.stats.leavesToday
-    ?.filter((l) => l.type.toLowerCase() !== "wfh")   // 👈 MAIN FIX
+    ?.filter((l) => l.type.toLowerCase() !== "wfh")
     .map((l) => (
       <div
         key={l.id}
-        className="flex items-center justify-between py-2 border-b dark:border-gray-700"
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-2 border-b dark:border-gray-700 gap-1 sm:gap-0"
       >
-        <div>
-          <div className="text-sm font-medium">
+        <div className="min-w-0">
+          <div className="text-xs sm:text-sm font-medium truncate">
             {l.user.firstName} {l.user.lastName}
           </div>
 
@@ -439,44 +448,13 @@ const departmentDoughnut = useMemo(() => {
       </div>
     ))}
 </div>
-
-
-                {/* WFH LIST */}
-                {/* <div>
-                  <h4 className="text-sm font-semibold text-blue-600 mb-2">🔵 Working From Home</h4>
-
-                  {(!data.stats.wfhToday || data.stats.wfhToday.length === 0) && (
-                    <div className="text-xs text-gray-500">No WFH today.</div>
-                  )}
-
-                  {data.stats.wfhToday?.map((w) => (
-                    <div
-                      key={w.id}
-                      className="flex items-center justify-between py-2 border-b dark:border-gray-700"
-                    >
-                      <div>
-                        <div className="text-sm font-medium">
-                          {w.user.firstName} {w.user.lastName}
-                        </div>
-
-                        <div className="text-xs text-gray-500">
-                          WFH (Working from home)
-                        </div>
-                      </div>
-
-                      <div className="text-xs text-gray-400">
-                        {w.dateFormatted}
-                      </div>
-                    </div>
-                  ))}
-                </div> */}
               </>
             )}
           </div>
 
           {/* ACTIVITY FEED (ONLY RECENT ATTENDANCE — CLEANED) */}
-          <div className="p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
-            <h3 className="font-semibold mb-3">Activity Feed (Recent)</h3>
+          <div className="p-3 sm:p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
+            <h3 className="font-semibold mb-3 text-sm sm:text-base">Activity Feed (Recent)</h3>
 
             {!data ? (
               <>
@@ -484,15 +462,15 @@ const departmentDoughnut = useMemo(() => {
                 <Skeleton className="h-10 mb-2" />
               </>
             ) : (
-              <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+              <div className="space-y-3 max-h-48 sm:max-h-60 overflow-y-auto pr-2">
                 {data.stats.attendanceTrend.slice(-10).reverse().map((a) => (
                   <div
                     key={a.id}
-                    className="py-3 flex items-start gap-3 border-b dark:border-gray-700"
+                    className="py-2 sm:py-3 flex items-start gap-2 sm:gap-3 border-b dark:border-gray-700"
                   >
-                    <div className="w-2.5 h-2.5 bg-green-400 rounded-full mt-2" />
-                    <div>
-                      <div className="text-sm">
+                    <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-green-400 rounded-full mt-1.5 sm:mt-2 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs sm:text-sm">
                         Attendance marked by{" "}
                         <span className="font-medium">
                           {a.user.firstName} {a.user.lastName}
@@ -508,30 +486,56 @@ const departmentDoughnut = useMemo(() => {
         </div>
 
         {/* RIGHT SIDEBAR */}
-        <div className="lg:col-span-4 space-y-6">
+        <div className="lg:col-span-4 space-y-4 sm:space-y-6">
 
           {/* Attendance Mini Chart */}
-          <div className="p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
-            <h3 className="font-semibold mb-3">Attendance Trend (7 days)</h3>
+          <div className="p-3 sm:p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
+            <h3 className="font-semibold mb-3 text-sm sm:text-base">Attendance Trend (7 days)</h3>
 
             {!data ? (
-              <Skeleton className="h-40" />
+              <Skeleton className="h-32 sm:h-40" />
             ) : (
-              <Line
-                data={attendanceLine}
-                options={{
-                  plugins: { legend: { display: false } },
-                  scales: { y: { min: 0, max: 1 } },
-                }}
-              />
+              <div className="h-32 sm:h-40">
+<Line
+  data={attendanceLine}
+  options={{
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      title: {
+        display: true,
+        text: "No. of Employees",
+        color: "#6b7280",
+        font: { size: 12, weight: "bold" },
+        padding: { bottom: 10 },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: { stepSize: 1, font: { size: 10 } },
+        title: {
+          display: true,
+          text: "Employees Count",
+          font: { size: 10 },
+        },
+      },
+      x: {
+        ticks: { maxRotation: 45, minRotation: 20, font: { size: 9 } },
+      },
+    },
+  }}
+/>
+              </div>
             )}
           </div>
 
 {/* PAYROLL MINI CARDS */}
-<div className="p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
+<div className="p-3 sm:p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
   <div className="flex items-center justify-between mb-3">
-    <h3 className="font-semibold">Payrolls</h3>
-    <div className="text-sm text-gray-500">{payrolls.length} records</div>
+    <h3 className="font-semibold text-sm sm:text-base">Payrolls</h3>
+    <div className="text-xs sm:text-sm text-gray-500">{payrolls.length} records</div>
   </div>
 
   {payrollsLoading ? (
@@ -540,15 +544,15 @@ const departmentDoughnut = useMemo(() => {
       <Skeleton className="h-20 mb-3" />
     </>
   ) : (
-    <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2 sidebar-scroll">
+    <div className="space-y-3 max-h-[280px] sm:max-h-[320px] overflow-y-auto pr-2 sidebar-scroll">
 
       {payrolls.map((p) => (
         <div
           key={p.id}
-          className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900/40 
+          className="p-2.5 sm:p-3 rounded-xl bg-gray-50 dark:bg-gray-900/40 
           border border-gray-200 dark:border-gray-700 shadow-sm"
         >
-          <div className="font-medium text-sm">
+          <div className="font-medium text-xs sm:text-sm break-words">
             {p.user?.firstName} {p.user?.lastName} —{" "}
             {new Date(p.salaryMonth).toLocaleDateString("en-IN", {
               month: "long",
@@ -560,38 +564,38 @@ const departmentDoughnut = useMemo(() => {
             Base: ₹{p.baseSalary} • Bonus: ₹{p.bonus} • Ded: ₹{p.deductions}
           </div>
 
-          <div className="font-semibold text-indigo-600 dark:text-indigo-300 text-sm mt-1">
+          <div className="font-semibold text-indigo-600 dark:text-indigo-300 text-xs sm:text-sm mt-1">
             Net Salary: ₹{p.netSalary}
           </div>
 
           {/* BUTTONS ROW */}
-          <div className="flex gap-2 mt-3">
+          <div className="flex gap-1.5 sm:gap-2 mt-2 sm:mt-3">
 
             {/* Download Slip */}
             <button
               onClick={() => downloadSlip(p)}
-              className="flex-1 px-2 py-1.5 bg-blue-600 hover:bg-blue-700 
+              className="flex-1 px-1.5 sm:px-2 py-1.5 bg-blue-600 hover:bg-blue-700 
               text-white rounded-lg text-xs flex items-center justify-center gap-1"
             >
-              <FiDownload /> Slip
+              <FiDownload className="text-xs" /> <span className="hidden xs:inline">Slip</span>
             </button>
 
             {/* Generate Button */}
             <button
               onClick={() => generateSingle(p.id)}
-              className="flex-1 px-2 py-1.5 bg-yellow-500 hover:bg-yellow-600 
+              className="flex-1 px-1.5 sm:px-2 py-1.5 bg-yellow-500 hover:bg-yellow-600 
               text-white rounded-lg text-xs flex items-center justify-center gap-1"
             >
-              <FiFileText /> Gen
+              <FiFileText className="text-xs" /> <span className="hidden xs:inline">Gen</span>
             </button>
 
             {/* Delete Button */}
             <button
               onClick={() => deletePayroll(p.id)}
-              className="flex-1 px-2 py-1.5 bg-red-500 hover:bg-red-600 
+              className="flex-1 px-1.5 sm:px-2 py-1.5 bg-red-500 hover:bg-red-600 
               text-white rounded-lg text-xs flex items-center justify-center"
             >
-              🗑 Delete
+              🗑
             </button>
 
           </div>
@@ -599,7 +603,7 @@ const departmentDoughnut = useMemo(() => {
       ))}
 
       {payrolls.length === 0 && (
-        <div className="text-sm text-gray-500">No payroll records found.</div>
+        <div className="text-xs sm:text-sm text-gray-500">No payroll records found.</div>
       )}
     </div>
   )}
@@ -607,7 +611,7 @@ const departmentDoughnut = useMemo(() => {
   <div className="mt-3">
     <button
       onClick={fetchPayrolls}
-      className="w-full px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-lg"
+      className="w-full px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-lg text-sm"
     >
       Refresh
     </button>
@@ -615,27 +619,27 @@ const departmentDoughnut = useMemo(() => {
 </div>
 
           {/* QUICK ACTIONS */}
-          <div className="p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
-            <h3 className="font-semibold mb-3">Quick Actions</h3>
+          <div className="p-3 sm:p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
+            <h3 className="font-semibold mb-3 text-sm sm:text-base">Quick Actions</h3>
 
             <div className="grid gap-2">
               <button
                 onClick={() => (window.location.href = "/employees")}
-                className="px-3 py-2 bg-white dark:bg-gray-900/40 rounded-lg text-left"
+                className="px-3 py-2 bg-white dark:bg-gray-900/40 rounded-lg text-left text-xs sm:text-sm"
               >
                 Manage Employees
               </button>
 
               <button
                 onClick={() => (window.location.href = "/leaves")}
-                className="px-3 py-2 bg-white dark:bg-gray-900/40 rounded-lg text-left"
+                className="px-3 py-2 bg-white dark:bg-gray-900/40 rounded-lg text-left text-xs sm:text-sm"
               >
                 Approve Leaves
               </button>
 
               <button
                 onClick={() => (window.location.href = "/notifications")}
-                className="px-3 py-2 bg-white dark:bg-gray-900/40 rounded-lg text-left"
+                className="px-3 py-2 bg-white dark:bg-gray-900/40 rounded-lg text-left text-xs sm:text-sm"
               >
                 Send Notification
               </button>
@@ -643,8 +647,8 @@ const departmentDoughnut = useMemo(() => {
           </div>
 
           {/* TODAY ACTIVITY (SCROLLABLE) */}
-          <div className="p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow mt-4">
-            <h3 className="font-semibold mb-3">Today's Activity</h3>
+          <div className="p-3 sm:p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
+            <h3 className="font-semibold mb-3 text-sm sm:text-base">Today's Activity</h3>
 
             {!data ? (
               <>
@@ -652,14 +656,14 @@ const departmentDoughnut = useMemo(() => {
                 <Skeleton className="h-10 mb-2" />
               </>
             ) : (
-              <div className="max-h-64 overflow-y-auto pr-2 space-y-3">
+              <div className="max-h-48 sm:max-h-64 overflow-y-auto pr-2 space-y-3">
 
                 {/* Today's Leaves */}
                 {data.stats.leavesToday?.map((l) => (
-                  <div key={l.id} className="flex items-start gap-3 border-b pb-2">
-                    <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full mt-2" />
-                    <div>
-                      <div className="text-sm">
+                  <div key={l.id} className="flex items-start gap-2 sm:gap-3 border-b pb-2">
+                    <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-yellow-400 rounded-full mt-1.5 sm:mt-2 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs sm:text-sm">
                         <strong>{l.type}</strong> - {l.user.firstName} {l.user.lastName}
                       </div>
                       <div className="text-xs text-gray-500">{l.startDateFormatted}</div>
@@ -669,10 +673,10 @@ const departmentDoughnut = useMemo(() => {
 
                 {/* Today's WFH */}
                 {data.stats.wfhToday?.map((w) => (
-                  <div key={w.id} className="flex items-start gap-3 border-b pb-2">
-                    <div className="w-2.5 h-2.5 bg-blue-400 rounded-full mt-2" />
-                    <div>
-                      <div className="text-sm">
+                  <div key={w.id} className="flex items-start gap-2 sm:gap-3 border-b pb-2">
+                    <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-blue-400 rounded-full mt-1.5 sm:mt-2 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs sm:text-sm">
                         WFH - {w.user.firstName} {w.user.lastName}
                       </div>
                       <div className="text-xs text-gray-500">{w.dateFormatted}</div>
@@ -684,10 +688,10 @@ const departmentDoughnut = useMemo(() => {
                 {data.stats.attendanceTrend
                   .filter((a) => a.isToday)
                   .map((a) => (
-                    <div key={a.id} className="flex items-start gap-3 border-b pb-2">
-                      <div className="w-2.5 h-2.5 bg-green-400 rounded-full mt-2" />
-                      <div>
-                        <div className="text-sm">
+                    <div key={a.id} className="flex items-start gap-2 sm:gap-3 border-b pb-2">
+                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-green-400 rounded-full mt-1.5 sm:mt-2 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-xs sm:text-sm">
                           Attendance - {a.user.firstName} {a.user.lastName}
                         </div>
                         <div className="text-xs text-gray-500">{a.dateFormatted}</div>

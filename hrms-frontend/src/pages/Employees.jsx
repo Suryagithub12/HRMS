@@ -140,12 +140,12 @@ export default function Employees() {
          UI
   ======================================================== */
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-0">
 
       {msg && (
         <div
           className={
-            `p-3 rounded-lg border ` +
+            `p-3 rounded-lg border text-sm sm:text-base ` +
             (msgType === "success"
               ? "bg-green-100 border-green-300 text-green-700"
               : "bg-red-100 border-red-300 text-red-700")
@@ -158,13 +158,13 @@ export default function Employees() {
       <PageTitle title="Employees" sub="Manage all employees" />
 
       <GlassCard>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-semibold">Employee List</h3>
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-3">
+          <h3 className="text-lg sm:text-xl font-semibold">Employee List</h3>
 
           {me?.role === "ADMIN" && (
             <button
               onClick={openCreate}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-xl flex items-center gap-2 hover:bg-indigo-700"
+              className="px-4 py-2 bg-indigo-600 text-white rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700 text-sm sm:text-base"
             >
               <FiPlus /> Add Employee
             </button>
@@ -204,25 +204,25 @@ export default function Employees() {
 
       {/* Delete Confirm Modal */}
       {confirmOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-lg max-w-sm w-full">
-            <h3 className="text-xl font-semibold mb-4">Confirm Delete</h3>
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 p-4 sm:p-6 rounded-xl shadow-lg max-w-sm w-full">
+            <h3 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Confirm Delete</h3>
 
-            <p className="text-gray-700 dark:text-gray-300 mb-6">
+            <p className="text-sm sm:text-base text-gray-700 dark:text-gray-300 mb-4 sm:mb-6">
               Are you sure you want to delete this employee?
             </p>
 
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-2 sm:gap-3">
               <button
                 onClick={() => setConfirmOpen(false)}
-                className="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-lg"
+                className="px-3 sm:px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-lg text-sm sm:text-base"
               >
                 No
               </button>
 
               <button
                 onClick={handleDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg"
+                className="px-3 sm:px-4 py-2 bg-red-600 text-white rounded-lg text-sm sm:text-base"
               >
                 Yes, Delete
               </button>
@@ -238,71 +238,17 @@ export default function Employees() {
 /* =======================================================
       SUB COMPONENTS
 ======================================================= */
-
-function EmployeesTable({ users, askDelete, openEdit, me, departments, navigate }) {
-  return (
-    <table className="w-full text-left border-collapse">
-      <thead>
-        <tr className="border-b dark:border-gray-700">
-          <th className="p-3">Name</th>
-          <th>Email</th>
-          <th>Role</th>
-          <th>Department</th>
-          {me?.role === "ADMIN" && <th className="text-right pr-3">Actions</th>}
-        </tr>
-      </thead>
-
-      <tbody>
-        {users.map((u) => (
-          <tr
-            key={u.id}
-            onClick={() => navigate(`/employees/${u.id}`)}
-            className="border-b dark:border-gray-800 hover:bg-gray-100/50 dark:hover:bg-gray-700/30"
-          >
-            <td className="p-3">{u.firstName} {u.lastName}</td>
-            <td>{u.email}</td>
-            <td>{u.role}</td>
-            <td>{departments.find((d) => d.id === u.departmentId)?.name || "-"}</td>
-
-            {me?.role === "ADMIN" && (
-              <td className="flex justify-end gap-3 pr-3 py-2">
-                <button
-                  onClick={(e) =>{
-                    e.stopPropagation();
-                    openEdit(u)}}
-                  className="p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600"
-                >
-                  <FiEdit />
-                </button>
-                <button
-                  onClick={() =>{
-                    e.stopPropagation();
-                    askDelete(u.id)}}
-                  className="p-2 rounded-lg bg-red-500 text-white hover:bg-red-600"
-                >
-                  <FiTrash2 />
-                </button>
-              </td>
-            )}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
 function PageTitle({ title, sub }) {
   return (
-    <div>
-      <h1 className="text-3xl font-bold">{title}</h1>
-      <p className="text-gray-600 dark:text-gray-400">{sub}</p>
+    <div className="mb-3 sm:mb-4">
+      <h1 className="text-2xl sm:text-3xl font-bold">{title}</h1>
+      <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">{sub}</p>
     </div>
   );
 }
-
 function GlassCard({ children }) {
   return (
-    <div className="p-6 rounded-2xl bg-white/70 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 backdrop-blur-xl shadow">
+    <div className="p-4 sm:p-6 rounded-2xl bg-white/70 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 backdrop-blur-xl shadow">
       {children}
     </div>
   );
@@ -311,10 +257,137 @@ function GlassCard({ children }) {
 function Modal({ children }) {
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl w-full max-w-lg shadow-xl">
+      <div className="bg-white dark:bg-gray-900 p-4 sm:p-6 rounded-2xl w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
         {children}
       </div>
     </div>
+  );
+}
+
+function EmployeesTable({ users, askDelete, openEdit, me, departments, navigate }) {
+  return (
+    <>
+      {/* ===== MOBILE CARD VIEW (xs, sm) ===== */}
+      <div className="sm:hidden space-y-3">
+        {users.map((u) => (
+          <div
+            key={u.id}
+            onClick={() => navigate(`/employees/${u.id}`)}
+            className="p-4 rounded-xl bg-white dark:bg-gray-800 border shadow cursor-pointer hover:bg-indigo-50 dark:hover:bg-gray-700 transition"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-base font-semibold">
+                {u.firstName} {u.lastName}
+              </h3>
+
+              <span className="px-2 py-1 text-xs rounded bg-gray-200 dark:bg-gray-700">
+                {u.role}
+              </span>
+            </div>
+
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              <strong>Email:</strong> {u.email}
+            </p>
+
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              <strong>Department:</strong>{" "}
+              {departments.find((d) => d.id === u.departmentId)?.name || "-"}
+            </p>
+
+            {me?.role === "ADMIN" && (
+              <div className="flex justify-end gap-2 mt-3">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEdit(u);
+                  }}
+                  className="p-2 rounded-lg bg-blue-500 text-white"
+                >
+                  <FiEdit size={16} />
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    askDelete(u.id);
+                  }}
+                  className="p-2 rounded-lg bg-red-500 text-white"
+                >
+                  <FiTrash2 size={16} />
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* ===== DESKTOP TABLE VIEW ===== */}
+      <div className="hidden sm:block overflow-x-auto w-full rounded-xl">
+        <table className="w-full text-left border-collapse min-w-[700px]">
+          <thead>
+            <tr className="border-b dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
+              <th className="p-3 text-sm">Name</th>
+              <th className="p-3 text-sm">Email</th>
+              <th className="p-3 text-sm">Role</th>
+              <th className="p-3 text-sm">Department</th>
+              {me?.role === "ADMIN" && (
+                <th className="p-3 text-sm text-right">Actions</th>
+              )}
+            </tr>
+          </thead>
+
+          <tbody>
+            {users.map((u) => (
+              <tr
+                key={u.id}
+                onClick={() => navigate(`/employees/${u.id}`)}
+                className="border-b dark:border-gray-800 hover:bg-indigo-100 dark:hover:bg-gray-700 cursor-pointer transition"
+              >
+                <td className="p-3 text-sm whitespace-nowrap">
+                  {u.firstName} {u.lastName}
+                </td>
+
+                <td className="p-3 text-sm whitespace-nowrap">{u.email}</td>
+
+                <td className="p-3 text-sm whitespace-nowrap">{u.role}</td>
+
+                <td className="p-3 text-sm whitespace-nowrap">
+                  {departments.find((d) => d.id === u.departmentId)?.name || "-"}
+                </td>
+
+                {me?.role === "ADMIN" && (
+                  <td className="p-3 text-sm whitespace-nowrap">
+                    <div className="flex justify-end gap-2">
+                      {/* Edit */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEdit(u);
+                        }}
+                        className="p-2 rounded-lg bg-blue-500 text-white"
+                      >
+                        <FiEdit size={16} />
+                      </button>
+
+                      {/* Delete */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          askDelete(u.id);
+                        }}
+                        className="p-2 rounded-lg bg-red-500 text-white"
+                      >
+                        <FiTrash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -324,18 +397,18 @@ function UserForm({ form, setForm, submit, close, editUser, errorMsg, me, depart
 
   return (
     <>
-      <h3 className="text-2xl font-semibold mb-4">
+      <h3 className="text-xl sm:text-2xl font-semibold mb-3 sm:mb-4">
         {editUser ? "Edit Employee" : "Add Employee"}
       </h3>
 
       {errorMsg && (
-        <div className="p-3 mb-3 rounded-lg bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+        <div className="p-3 mb-3 rounded-lg bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 text-sm">
           {errorMsg}
         </div>
       )}
 
-      <form onSubmit={submit} className="space-y-4">
-        <div className="flex gap-3">
+      <form onSubmit={submit} className="space-y-3 sm:space-y-4">
+        <div className="flex flex-col sm:flex-row gap-3">
           <input
             className="input"
             placeholder="First name"
@@ -403,16 +476,16 @@ function UserForm({ form, setForm, submit, close, editUser, errorMsg, me, depart
           </div>
         )}
 
-        <div className="flex justify-end gap-3 pt-3">
+        <div className="flex justify-end gap-2 sm:gap-3 pt-3">
           <button
             type="button"
             onClick={close}
-            className="px-4 py-2 rounded-lg bg-gray-300 dark:bg-gray-700"
+            className="px-3 sm:px-4 py-2 rounded-lg bg-gray-300 dark:bg-gray-700 text-sm sm:text-base"
           >
             Cancel
           </button>
 
-          <button className="px-4 py-2 rounded-lg bg-indigo-600 text-white">
+          <button className="px-3 sm:px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm sm:text-base">
             {editUser ? "Update" : "Create"}
           </button>
         </div>
@@ -421,10 +494,17 @@ function UserForm({ form, setForm, submit, close, editUser, errorMsg, me, depart
       <style>{`
         .input {
           width: 100%;
-          padding: 10px;
+          padding: 8px 10px;
           border-radius: 10px;
           background: #f7f7f7;
           border: 1px solid #ddd;
+          font-size: 14px;
+        }
+        @media (min-width: 640px) {
+          .input {
+            padding: 10px;
+            font-size: 16px;
+          }
         }
         .dark .input {
           background: #1f2937;

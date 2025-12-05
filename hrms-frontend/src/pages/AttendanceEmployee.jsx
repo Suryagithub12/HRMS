@@ -534,7 +534,21 @@ return (
                   }`}
                 >
                   <div className="text-lg sm:text-2xl font-bold">{d.day}</div>
-                  <div className="text-xs sm:text-sm font-semibold">{d.status}</div>
+                 <div
+                 className="
+                 font-semibold 
+                 text-[7px]     /* smallest size for mobile */
+                 xs:text-[9px]
+                 sm:text-[11px]
+                 md:text-xs
+                 lg:text-sm
+                 whitespace-nowrap
+                 text-center 
+                 leading-tight
+                "
+                >
+               {d.status}
+              </div>
                 </div>
               ))}
             </div>

@@ -202,11 +202,18 @@ export default function Notifications() {
   const finalList = isAdmin ? mergedForAdmin : notes;
 
   /* SEARCH */
-  const list = finalList.filter(
-    (n) =>
-      n.title.toLowerCase().includes(filter.search.toLowerCase()) ||
-      n.body.toLowerCase().includes(filter.search.toLowerCase())
-  );
+const list = finalList.filter((n) => {
+  const matchesSearch =
+    n.title.toLowerCase().includes(filter.search.toLowerCase()) ||
+    n.body.toLowerCase().includes(filter.search.toLowerCase());
+
+  // READ FILTERS
+  if (filter.type === "READ") return n.isRead && matchesSearch;
+  if (filter.type === "UNREAD") return !n.isRead && matchesSearch;
+
+  // ALL
+  return matchesSearch;
+});
 
   return (
     <div className="space-y-6">

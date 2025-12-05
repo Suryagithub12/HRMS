@@ -361,8 +361,19 @@ function PayrollCard({
   handleUpload,
 }) {
   return (
-    <div className="p-5 rounded-2xl bg-white/80 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 shadow-md hover:shadow-xl transition-all flex justify-between backdrop-blur-xl">
-      <div>
+    <div className="
+      p-5 rounded-2xl bg-white/80 dark:bg-gray-800/60 
+      border border-gray-200 dark:border-gray-700 
+      shadow-md hover:shadow-xl transition-all 
+      backdrop-blur-xl
+
+      flex flex-col md:flex-row 
+      md:justify-between md:items-center 
+      gap-4
+    ">
+      
+      {/* LEFT SECTION */}
+      <div className="flex-1">
         <div className="font-semibold text-lg text-gray-900 dark:text-white">
           {item.user?.firstName} {item.user?.lastName} —{" "}
           <span className="font-normal">
@@ -383,7 +394,12 @@ function PayrollCard({
         </div>
       </div>
 
-      <div className="flex gap-2">
+      {/* RIGHT SECTION (Buttons) */}
+      <div className="
+        flex flex-wrap 
+        gap-2 
+        justify-start md:justify-end
+      ">
         <button
           onClick={() => download(item)}
           className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow flex items-center gap-2"

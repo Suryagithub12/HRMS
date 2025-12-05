@@ -1,38 +1,39 @@
-// src/pages/AttendanceAdmin.jsx
+// =============================
+// AttendanceAdmin.jsx (PART 1)
+// =============================
 import React, { useEffect, useState, useCallback } from "react";
 import api from "../api/axios";
 
 /* ----------------------------------------------------------
-   SHARED HELPERS
+   HELPERS
 ---------------------------------------------------------- */
-const toISODate = (d) => {
-  if (!d) return null;
-  const x = new Date(d);
-  return isNaN(x) ? null : x.toISOString().slice(0, 10);
-};
-
-const parseHours = (cin, cout) => {
-  if (!cin || !cout) return 0;
-  const diff = new Date(cout) - new Date(cin);
-  return diff > 0 ? +(diff / 3600000).toFixed(2) : 0;
-};
+const toISODate = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
 
 const formatTime = (v) =>
   v
     ? new Date(v).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : "--";
+    : "—";
 
-/* QUICK FILTER HELPERS */
+const parseHours = (cin, cout) => {
+  if (!cin || !cout) return 0;
+  const diff = new Date(cout) - new Date(cin);
+  return diff > 0 ? (diff / 3600000).toFixed(2) : 0;
+};
+
+/* QUICK FILTERS */
 const getToday = () => {
-  const t = toISODate(new Date());
-  return { start: t, end: t };
+  const d = new Date();
+  const iso = toISODate(d);
+  return { start: iso, end: iso };
 };
 const getThisWeek = () => {
   const d = new Date();
   const day = d.getDay();
   const diff = day === 0 ? 6 : day - 1;
+
   const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - diff);
   const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
+
   return { start: toISODate(mon), end: toISODate(sun) };
 };
 const getThisMonth = () => {
@@ -51,24 +52,21 @@ const getThisYear = () => {
 };
 
 /* ----------------------------------------------------------
-   SMALL UI CARD
+   STAT CARD
 ---------------------------------------------------------- */
 function StatCard({ title, value, color }) {
   return (
-    <div className="p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow border border-gray-200 dark:border-gray-700 text-center">
-      <p className="text-sm text-gray-500 dark:text-gray-300">{title}</p>
+    <div className="p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl text-center border shadow">
+      <p className="text-sm text-gray-500">{title}</p>
       <p className={`text-2xl font-extrabold ${color}`}>{value}</p>
     </div>
   );
 }
 
 /* ----------------------------------------------------------
-   MAIN ADMIN ATTENDANCE
+   MAIN SCREEN
 ---------------------------------------------------------- */
 export default function AttendanceAdmin() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
   const [filters, setFilters] = useState({
     start: getToday().start,
     end: getToday().end,
@@ -80,115 +78,103 @@ export default function AttendanceAdmin() {
   const [departments, setDepartments] = useState([]);
   const [employees, setEmployees] = useState([]);
 
-  const [attendanceList, setAttendanceList] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
   const [summary, setSummary] = useState({
     present: 0,
     absent: 0,
-    late: 0,
     leave: 0,
-    wfh: 0, // FIXED
+    wfh: 0,
   });
+
+  const [attendance, setAttendance] = useState([]);
 
   const [employeeModal, setEmployeeModal] = useState(null);
 
-/* ----------------------------------------------------------
-   LOAD DEPARTMENTS + USERS
----------------------------------------------------------- */
-  useEffect(() => {
-    (async () => {
+  /* LOAD DEPARTMENTS + USERS */
+useEffect(() => {
+  async function load() {
+    try {
+      const [d, u] = await Promise.all([
+        api.get("/departments"),
+        api.get("/users"),
+      ]);
+      setDepartments(d.data.departments ?? []);
+      setEmployees(u.data.users ?? []);
+    } catch {}
+  }
+  load();
+}, []);
+
+  /* LOAD ATTENDANCE */
+  const loadAttendance = useCallback(
+    async (overrides = null) => {
+      const f = overrides ? { ...filters, ...overrides } : filters;
       try {
-        const [d, u] = await Promise.all([
-          api.get("/departments"),
-          api.get("/users"),
-        ]);
-        setDepartments(d.data.departments ?? []);
-        setEmployees(u.data.users ?? []);
-      } catch {}
-    })();
-  }, []);
+        setLoading(true);
+        setError("");
 
-/* ----------------------------------------------------------
-   LOAD ATTENDANCE (ADMIN)
----------------------------------------------------------- */
-  const loadAttendance = useCallback(async (overrides = null) => {
-    const f = overrides ? { ...filters, ...overrides } : filters;
+        const q = new URLSearchParams();
+        if (f.start) q.append("start", f.start);
+        if (f.end) q.append("end", f.end);
+        if (f.departmentId) q.append("departmentId", f.departmentId);
+        if (f.userId) q.append("userId", f.userId);
+        if (f.status) q.append("status", f.status);
 
-    try {
-      setLoading(true);
-      setError("");
+        const res = await api.get(`/attendance/all?${q.toString()}`);
 
-      const q = new URLSearchParams();
-      if (f.start) q.append("start", f.start);
-      if (f.end) q.append("end", f.end);
-      if (f.departmentId) q.append("departmentId", f.departmentId);
-      if (f.userId) q.append("userId", f.userId);
-      if (f.status) q.append("status", f.status);
+        const att = res.data.attendances ?? [];
 
-      const res = await api.get(`/attendance/all?${q.toString()}`);
+        setAttendance(
+          att.map((a) => ({
+            ...a,
+            totalHours:
+              a.status === "WFH" ? "WFH" : parseHours(a.checkIn, a.checkOut),
+          }))
+        );
 
-      const att = res.data.attendances ?? [];
+        setSummary({
+          present: res.data.summary.present,
+          absent: res.data.summary.absent,
+          leave: res.data.summary.leave,
+          wfh: att.filter((a) => a.status === "WFH").length,
+        });
+      } catch (err) {
+        setError("Unable to load attendance");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filters]
+  );
 
-   setAttendanceList(
-    att.map((a) => ({
-        ...a,
-        totalHours:
-            a.status === "WFH"
-                ? "WFH"
-                : parseHours(a.checkIn, a.checkOut),
-    }))
-);
-
-// 🔥 FIX WFH summary count
-setSummary({
-  ...res.data.summary,
-  wfh: att.filter((a) => a.status === "WFH").length,
-});
+  useEffect(() => {
+  async function run() {
+    await loadAttendance();
+  }
+  run();
+}, [loadAttendance]);
 
 
-  setSummary({
-  present: res.data.summary.present,
-  absent: res.data.summary.absent,
-  late: res.data.summary.late,
-  leave: res.data.summary.leave,
-  wfh: att.filter((a) => a.status === "WFH").length, // FIXED
-});
-
-    } catch (err) {
-      setError(err?.response?.data?.message || "Unable to load attendance");
-    } finally {
-      setLoading(false);
-    }
-  }, [filters]);
-
-  useEffect(() => { loadAttendance(); }, [loadAttendance]);
-
-/* ----------------------------------------------------------
-   EXPORT CSV / EXCEL
----------------------------------------------------------- */
-  const exportFile = async (format = "csv") => {
+  /* EXPORT */
+  const exportFile = async (format) => {
     try {
       const q = new URLSearchParams();
-      if (filters.start) q.append("start", filters.start);
-      if (filters.end) q.append("end", filters.end);
+      q.append("start", filters.start);
+      q.append("end", filters.end);
 
       const res = await api.get(
         `/attendance/export?format=${format}&${q.toString()}`,
         { responseType: "blob" }
       );
 
-      const type =
-        res.headers["content-type"] ||
-        (format === "xlsx"
-          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          : "text/csv");
-
-      const blob = new Blob([res.data], { type });
+      const blob = new Blob([res.data]);
       const url = window.URL.createObjectURL(blob);
 
       const a = document.createElement("a");
       a.href = url;
       a.download = `attendance.${format}`;
-      document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
@@ -197,61 +183,59 @@ setSummary({
     }
   };
 
-/* ----------------------------------------------------------
-   OPEN EMPLOYEE MODAL
----------------------------------------------------------- */
+  /* OPEN EMPLOYEE MODAL */
   const openEmployeeModal = async (userId) => {
     try {
       const month = filters.start?.slice(0, 7);
-      const res = await api.get(`/attendance/user/${userId}/month?month=${month}`);
-      setEmployeeModal({ user: res.data.user, logs: res.data.days });
+      const r = await api.get(`/attendance/user/${userId}/month?month=${month}`);
+      setEmployeeModal({ user: r.data.user, logs: r.data.days });
     } catch {
-      setError("Failed to load employee logs");
+      setError("Failed to load logs");
     }
   };
 
-/* ----------------------------------------------------------
-   UI STRUCTURE
----------------------------------------------------------- */
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-3">
 
-      {/* EXPORT BUTTONS */}
+      {/* EXPORT */}
       <div className="flex justify-end gap-2">
-        <button onClick={() => exportFile("csv")}
-          className="px-3 py-1 bg-indigo-600 text-white rounded-lg shadow">
+        <button
+          onClick={() => exportFile("csv")}
+          className="px-3 py-1 bg-indigo-600 text-white rounded-lg shadow"
+        >
           CSV
         </button>
-
-        <button onClick={() => exportFile("xlsx")}
-          className="px-3 py-1 bg-indigo-600 text-white rounded-lg shadow">
+        <button
+          onClick={() => exportFile("xlsx")}
+          className="px-3 py-1 bg-indigo-600 text-white rounded-lg shadow"
+        >
           Excel
         </button>
       </div>
 
-      {error && <div className="p-3 bg-red-200 text-red-800 rounded-lg">{error}</div>}
+      {error && <div className="p-3 bg-red-200 text-red-800 rounded-xl">{error}</div>}
 
       {/* SUMMARY CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard title="Present" value={summary.present} color="text-green-600" />
         <StatCard title="WFH" value={summary.wfh} color="text-blue-600" />
         <StatCard title="Leave" value={summary.leave} color="text-yellow-600" />
-        {/* <StatCard title="Late" value={summary.late} color="text-orange-600" /> */}
+        <StatCard title="Absent" value={summary.absent} color="text-red-600" />
       </div>
 
       {/* FILTER PANEL */}
       <AdminFilters
         filters={filters}
+        setFilters={setFilters}
         departments={departments}
         employees={employees}
-        setFilters={setFilters}
         loadAttendance={loadAttendance}
       />
 
-      {/* ATTENDANCE TABLE */}
+      {/* TABLE + MOBILE CARDS */}
       <AttendanceTable
-        rows={attendanceList}
         loading={loading}
+        rows={attendance}
         onView={openEmployeeModal}
       />
 
@@ -266,112 +250,138 @@ setSummary({
     </div>
   );
 }
+// =============================
+// PART 2 — FILTERS + MOBILE CARDS + TABLE
+// =============================
+
 /* ----------------------------------------------------------
    FILTER PANEL
 ---------------------------------------------------------- */
-function AdminFilters({ filters, departments, employees, setFilters, loadAttendance }) {
-  
+function AdminFilters({ filters, setFilters, departments, employees, loadAttendance }) {
   const applyRange = (r) => {
     setFilters((p) => ({ ...p, start: r.start, end: r.end }));
     loadAttendance(r);
   };
 
   return (
-    <div className="p-4 rounded-xl bg-white/70 dark:bg-gray-800/50 shadow border border-gray-200 dark:border-gray-700 space-y-4">
+    <div className="p-4 rounded-xl bg-white/70 dark:bg-gray-800/50 shadow border space-y-4">
 
-      {/* Quick filters */}
+      {/* Quick Filters */}
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => applyRange(getToday())}
-          className="px-3 py-1 bg-blue-600 text-white rounded-lg">Today</button>
+        <button
+          onClick={() => applyRange(getToday())}
+          className="px-3 py-1 bg-blue-600 text-white rounded-lg"
+        >
+          Today
+        </button>
 
-        <button onClick={() => applyRange(getThisWeek())}
-          className="px-3 py-1 bg-purple-600 text-white rounded-lg">This Week</button>
+        <button
+          onClick={() => applyRange(getThisWeek())}
+          className="px-3 py-1 bg-purple-600 text-white rounded-lg"
+        >
+          This Week
+        </button>
 
-        <button onClick={() => applyRange(getThisMonth())}
-          className="px-3 py-1 bg-green-600 text-white rounded-lg">This Month</button>
+        <button
+          onClick={() => applyRange(getThisMonth())}
+          className="px-3 py-1 bg-green-600 text-white rounded-lg"
+        >
+          This Month
+        </button>
 
-        <button onClick={() => applyRange(getThisYear())}
-          className="px-3 py-1 bg-orange-600 text-white rounded-lg">This Year</button>
+        <button
+          onClick={() => applyRange(getThisYear())}
+          className="px-3 py-1 bg-orange-600 text-white rounded-lg"
+        >
+          This Year
+        </button>
       </div>
 
       {/* Detailed Filters */}
       <div className="grid md:grid-cols-5 gap-4">
 
+        {/* Start Date */}
         <div>
           <label className="text-sm">Start</label>
           <input
             type="date"
-            className="w-full px-2 py-1 rounded border bg-white dark:bg-gray-900"
             value={filters.start}
             onChange={(e) =>
               setFilters((p) => ({ ...p, start: e.target.value }))
             }
+            className="w-full px-2 py-2 rounded border bg-white dark:bg-gray-900"
           />
         </div>
 
+        {/* End Date */}
         <div>
           <label className="text-sm">End</label>
           <input
             type="date"
-            className="w-full px-2 py-1 rounded border bg-white dark:bg-gray-900"
             value={filters.end}
             onChange={(e) =>
               setFilters((p) => ({ ...p, end: e.target.value }))
             }
+            className="w-full px-2 py-2 rounded border bg-white dark:bg-gray-900"
           />
         </div>
 
+        {/* Department */}
         <div>
           <label className="text-sm">Department</label>
           <select
-            className="w-full px-2 py-1 rounded border bg-white dark:bg-gray-900"
             value={filters.departmentId}
             onChange={(e) =>
               setFilters((p) => ({ ...p, departmentId: e.target.value }))
             }
+            className="w-full px-2 py-2 rounded border bg-white dark:bg-gray-900"
           >
             <option value="">All</option>
             {departments.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
             ))}
           </select>
         </div>
 
+        {/* Employees */}
         <div>
           <label className="text-sm">Employee</label>
           <select
-            className="w-full px-2 py-1 rounded border bg-white dark:bg-gray-900"
             value={filters.userId}
             onChange={(e) =>
               setFilters((p) => ({ ...p, userId: e.target.value }))
             }
+            className="w-full px-2 py-2 rounded border bg-white dark:bg-gray-900"
           >
             <option value="">All</option>
             {employees.map((e) => (
-              <option key={e.id} value={e.id}>{e.firstName}</option>
+              <option key={e.id} value={e.id}>
+                {e.firstName} {e.lastName}
+              </option>
             ))}
           </select>
         </div>
 
-        {/* WFH Filter FIX */}
+        {/* Status */}
         <div>
           <label className="text-sm">Status</label>
           <select
-            className="w-full px-2 py-1 rounded border bg-white dark:bg-gray-900"
             value={filters.status}
             onChange={(e) =>
               setFilters((p) => ({ ...p, status: e.target.value }))
             }
+            className="w-full px-2 py-2 rounded border bg-white dark:bg-gray-900"
           >
             <option value="">All</option>
             <option value="PRESENT">Present</option>
             <option value="ABSENT">Absent</option>
             <option value="LATE">Late</option>
-            <option value="WFH">WFH</option>   {/* FIX */}
+            <option value="WFH">WFH</option>
             <option value="LEAVE">Leave</option>
           </select>
         </div>
-
       </div>
 
       <button
@@ -385,123 +395,228 @@ function AdminFilters({ filters, departments, employees, setFilters, loadAttenda
 }
 
 /* ----------------------------------------------------------
-   TABLE
+   STATUS BADGE
 ---------------------------------------------------------- */
-function AttendanceTable({ rows, loading, onView }) {
+function StatusBadge({ status }) {
+  const colors = {
+    PRESENT: "bg-green-100 text-green-700",
+    ABSENT: "bg-red-100 text-red-700",
+    LATE: "bg-orange-100 text-orange-700",
+    WFH: "bg-blue-100 text-blue-700",
+    LEAVE: "bg-yellow-100 text-yellow-700",
+  };
+
   return (
-    <div className="rounded-xl bg-white/70 dark:bg-gray-800/50 shadow border border-gray-200 dark:border-gray-700 overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
-            <th className="p-2 text-left">Employee</th>
-            <th className="p-2 text-left">Date</th>
-            <th className="p-2 text-left">In</th>
-            <th className="p-2 text-left">Out</th>
-            <th className="p-2 text-left">Hours</th>
-            <th className="p-2 text-left">Status</th>
-            <th className="p-2 text-left">Action</th>
-          </tr>
-        </thead>
+    <span className={`px-3 py-1 rounded-lg text-xs font-semibold ${colors[status]}`}>
+      {status}
+    </span>
+  );
+}
 
-        <tbody>
-          {loading ? (
-            <tr>
-              <td colSpan="7" className="text-center p-4">Loading...</td>
-            </tr>
-          ) : rows.length === 0 ? (
-            <tr>
-              <td colSpan="7" className="text-center p-4">No records</td>
-            </tr>
-          ) : (
-            rows.map((r) => (
-              <tr key={r.id} className="border-t dark:border-gray-700">
+/* ----------------------------------------------------------
+   MOBILE CARD VIEW (FULL RESPONSIVE)
+---------------------------------------------------------- */
+function MobileAttendanceCards({ rows, onView }) {
+  return (
+    <div className="space-y-3 sm:hidden">
 
-                <td className="p-2">{r?.user?.firstName}</td>
-                <td className="p-2">{toISODate(r.date)}</td>
+      {rows.map((r) => (
+        <div
+          key={r.id}
+          className="p-4 bg-white dark:bg-gray-800 rounded-xl shadow border space-y-2"
+        >
+          <div className="flex justify-between">
+            <h3 className="font-semibold text-base">
+              {r.user?.firstName} {r.user?.lastName}
+            </h3>
 
-                {/* WFH FIX — show dash for no check-in/out */}
-                <td className="p-2">
-                  {r.status === "WFH" ? "—" : formatTime(r.checkIn)}
-                </td>
+            <StatusBadge status={r.status} />
+          </div>
 
-                <td className="p-2">
-                  {r.status === "WFH" ? "—" : formatTime(r.checkOut)}
-                </td>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            <strong>Date:</strong> {toISODate(r.date)}
+          </p>
 
-                {/* Hours Fix */}
-                <td className="p-2">
-                  {r.status === "WFH" ? "WFH" : `${r.totalHours} hrs`}
-                </td>
+          <p className="text-sm">
+            <strong>In:</strong> {r.status === "WFH" ? "—" : formatTime(r.checkIn)}
+          </p>
 
-                <td
-                  className={`p-2 font-semibold ${
-                    r.status === "PRESENT"
-                      ? "text-green-600"
-                      : r.status === "ABSENT"
-                      ? "text-red-600"
-                      : r.status === "LATE"
-                      ? "text-orange-600"
-                      : r.status === "WFH"
-                      ? "text-blue-600"
-                      : "text-yellow-600"
-                  }`}
-                >
-                  {r.status}
-                </td>
+          <p className="text-sm">
+            <strong>Out:</strong> {r.status === "WFH" ? "—" : formatTime(r.checkOut)}
+          </p>
 
-                <td className="p-2">
-                  <button
-                    onClick={() => onView(r.userId)}
-                    className="text-indigo-600 dark:text-indigo-400 underline"
-                  >
-                    View Logs
-                  </button>
-                </td>
+          <p className="text-sm">
+            <strong>Hours:</strong>{" "}
+            {r.status === "WFH" ? "WFH" : `${r.totalHours} hrs`}
+          </p>
 
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+          <button
+            onClick={() => onView(r.userId)}
+            className="mt-2 px-3 py-1 bg-indigo-600 text-white rounded-lg text-sm shadow"
+          >
+            View Logs
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
 
 /* ----------------------------------------------------------
-   EMPLOYEE MODAL
+   DESKTOP TABLE VIEW
 ---------------------------------------------------------- */
+function AttendanceTable({ rows, loading, onView }) {
+  return (
+    <>
+      {/* MOBILE CARDS */}
+      <MobileAttendanceCards rows={rows} onView={onView} />
+
+      {/* DESKTOP TABLE */}
+      <div className="hidden sm:block rounded-xl bg-white/70 dark:bg-gray-800/50 shadow border overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+              <th className="p-2 text-left">Employee</th>
+              <th className="p-2 text-left">Date</th>
+              <th className="p-2 text-left">In</th>
+              <th className="p-2 text-left">Out</th>
+              <th className="p-2 text-left">Hours</th>
+              <th className="p-2 text-left">Status</th>
+              <th className="p-2 text-left">Action</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan="7" className="p-4 text-center">
+                  Loading...
+                </td>
+              </tr>
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan="7" className="p-4 text-center">
+                  No Records Found
+                </td>
+              </tr>
+            ) : (
+              rows.map((r) => (
+                <tr key={r.id} className="border-t dark:border-gray-700">
+
+                  <td className="p-2">
+                    {r.user?.firstName} {r.user?.lastName}
+                  </td>
+
+                  <td className="p-2">{toISODate(r.date)}</td>
+
+                  <td className="p-2">
+                    {r.status === "WFH" ? "—" : formatTime(r.checkIn)}
+                  </td>
+
+                  <td className="p-2">
+                    {r.status === "WFH" ? "—" : formatTime(r.checkOut)}
+                  </td>
+
+                  <td className="p-2">
+                    {r.status === "WFH" ? "WFH" : `${r.totalHours} hrs`}
+                  </td>
+
+                  <td className="p-2">
+                    <StatusBadge status={r.status} />
+                  </td>
+
+                  <td className="p-2">
+                    <button
+                      onClick={() => onView(r.userId)}
+                      className="text-indigo-600 underline"
+                    >
+                      View Logs
+                    </button>
+                  </td>
+
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+// =============================
+// PART 3 — EMPLOYEE MODAL (FULL RESPONSIVE)
+// =============================
 function EmployeeModal({ employee, logs, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow-xl border border-gray-200 dark:border-gray-700 max-w-3xl w-full">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+      <div className="
+        bg-white dark:bg-gray-900 
+        rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 
+        w-full max-w-4xl 
+        max-h-[90vh] overflow-y-auto 
+        p-4 sm:p-6
+      ">
 
+        {/* Header */}
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-            Attendance — {employee?.firstName}
+          <h2 className="text-lg sm:text-xl font-bold">
+            Attendance Logs — {employee?.firstName} {employee?.lastName}
           </h2>
+
           <button
             onClick={onClose}
-            className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-md text-sm"
+            className="px-3 py-1 sm:px-4 sm:py-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm"
           >
             Close
           </button>
         </div>
 
-        <div className="grid grid-cols-7 gap-2">
+        {/* GRID LOGS (FULL RESPONSIVE) */}
+        <div className="
+          grid 
+          grid-cols-1 
+          xs:grid-cols-2 
+          md:grid-cols-3 
+          lg:grid-cols-4 
+          gap-3 sm:gap-4
+        ">
           {logs?.length === 0 ? (
-            <p className="col-span-7 text-center">No logs found</p>
+            <p className="col-span-full text-center text-gray-500">No logs found</p>
           ) : (
             logs.map((d) => (
               <div
                 key={d.id}
-                className="p-2 rounded-lg border dark:border-gray-700 bg-white/80 dark:bg-gray-800 text-center"
+                className="
+                  p-3 sm:p-4 
+                  rounded-xl border border-gray-300 dark:border-gray-700 
+                  bg-white/80 dark:bg-gray-800 
+                  text-center shadow-sm
+                "
               >
-                <p className="font-semibold">{toISODate(d.date)}</p>
-                <p className="text-xs">{d.status}</p>
-                <p className="text-xs">In: {formatTime(d.checkIn)}</p>
-                <p className="text-xs">Out: {formatTime(d.checkOut)}</p>
-                <p className="text-xs">
-                  Hours: {d.status === "WFH" ? "WFH" : parseHours(d.checkIn, d.checkOut)}
+                <p className="font-semibold text-sm sm:text-base">
+                  {toISODate(d.date)}
+                </p>
+
+                <p className="text-xs sm:text-sm mt-1 font-medium">
+                  Status:{" "}
+                  <span className="font-bold">
+                    {d.status}
+                  </span>
+                </p>
+
+                <p className="text-xs sm:text-sm mt-1">
+                  In: {formatTime(d.checkIn)}
+                </p>
+
+                <p className="text-xs sm:text-sm">
+                  Out: {formatTime(d.checkOut)}
+                </p>
+
+                <p className="text-xs sm:text-sm font-medium mt-1">
+                  Hours:{" "}
+                  {d.status === "WFH"
+                    ? "WFH"
+                    : parseHours(d.checkIn, d.checkOut)}
                 </p>
               </div>
             ))
