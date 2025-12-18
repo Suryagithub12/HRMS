@@ -1,4 +1,4 @@
-// ====================== LeavesEmployee.jsx (FINAL CLEAN VERSION) ======================
+// ====================== LeavesEmployee.jsx (FINAL FIXED VERSION) ======================
 import React, { useEffect, useState } from "react";
 import api from "../api/axios";
 import useAuthStore from "../stores/authstore";
@@ -34,6 +34,27 @@ function getUniqueLeaveDays(leaves) {
   return total;
 }
 
+// --- Calculate unique leave units (handles half days) ---
+function getUniqueLeaveUnits(leaves) {
+  const dayMap = {}; // { "2025-09-10": 1 | 0.5 }
+
+  leaves.forEach((l) => {
+    let cur = new Date(l.startDate);
+    const end = new Date(l.endDate);
+
+    const value = l.type === "HALF_DAY" ? 0.5 : 1;
+
+    while (cur <= end) {
+      const iso = cur.toISOString().slice(0, 10);
+      // Same date → max value wins
+      dayMap[iso] = Math.max(dayMap[iso] || 0, value);
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+
+  return Object.values(dayMap).reduce((a, b) => a + b, 0);
+}
+
 export default function Leaves() {
   const [leaves, setLeaves] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -52,6 +73,8 @@ export default function Leaves() {
   const [loading, setLoading] = useState(true);
   const [applied, setApplied] = useState(false);
   const [todayApplied, setTodayApplied] = useState(false);
+  const [applyMessage, setApplyMessage] = useState("");
+  const [todayApplyMessage, setTodayApplyMessage] = useState("");
 
   const [form, setForm] = useState({
     type: "CASUAL",
@@ -84,45 +107,91 @@ export default function Leaves() {
     return Math.floor((e - s) / (1000 * 60 * 60 * 24)) + 1;
   };
 
-  // ⭐ Unique approved leave days
-  const approvedLeaveDays = getUniqueLeaveDays(
+  const getLeaveUnits = (l) => {
+    if (l.type === "HALF_DAY") return 0.5;
+    return getDays(l);
+  };
+
+  // ⭐ Unique approved leave days (excluding WFH and UNPAID)
+  const approvedLeaveDays = getUniqueLeaveUnits(
     leaves.filter(
       (l) =>
         l.status === "APPROVED" &&
         l.type !== "WFH" &&
         l.type !== "UNPAID" &&
-        l.startDate >= yearStart &&
-        l.endDate <= yearEnd
+        new Date(l.startDate) >= new Date(yearStart) &&
+        new Date(l.endDate) <= new Date(yearEnd)
     )
   );
 
-  const remainingLeaves = TOTAL_YEARLY_LEAVES - approvedLeaveDays;
-// ⭐ WFH unique days
-const totalWFHDays = getUniqueLeaveDays(
-  leaves.filter(
+  // ⭐ Applied leave days (all leaves excluding WFH)
+  const appliedLeaveDays = getUniqueLeaveUnits(
+    leaves.filter(
+      (l) =>
+        l.type !== "WFH" &&
+        new Date(l.startDate) >= new Date(yearStart) &&
+        new Date(l.endDate) <= new Date(yearEnd)
+    )
+  );
+
+  // ⭐ WFH unique days (all WFH)
+  const totalWFHDays = getUniqueLeaveDays(
+    leaves.filter(
+      (l) =>
+        l.type?.toUpperCase() === "WFH" &&
+        new Date(l.startDate) >= new Date(yearStart) &&
+        new Date(l.endDate) <= new Date(yearEnd)
+    )
+  );
+
+  // ⭐ Approved WFH unique days
+  const approvedWFHDays = getUniqueLeaveDays(
+    leaves.filter(
+      (l) =>
+        l.type?.toUpperCase() === "WFH" &&
+        l.status === "APPROVED" &&
+        new Date(l.startDate) >= new Date(yearStart) &&
+        new Date(l.endDate) <= new Date(yearEnd)
+    )
+  );
+
+  // ⭐ Total half day applied (count)
+  const totalAppliedHalfDay = leaves.filter(
     (l) =>
-      l.type?.toUpperCase() === "WFH" &&
+      l.type === "HALF_DAY" &&
       new Date(l.startDate) >= new Date(yearStart) &&
       new Date(l.endDate) <= new Date(yearEnd)
-  )
-);
+  ).length;
 
-// ⭐ Approved WFH unique days
-const approvedWFHDays = getUniqueLeaveDays(
-  leaves.filter(
+  // ⭐ Approved half day (count)
+  const approvedHalfDay = leaves.filter(
     (l) =>
-      l.type?.toUpperCase() === "WFH" &&
+      l.type?.toUpperCase() === "HALF_DAY" &&
       l.status === "APPROVED" &&
       new Date(l.startDate) >= new Date(yearStart) &&
       new Date(l.endDate) <= new Date(yearEnd)
-  )
-);
+  ).length;
+
+  // ⭐ Remaining leaves
+  const remainingLeaves = Math.max(TOTAL_YEARLY_LEAVES - approvedLeaveDays, 0);
 
   useEffect(() => {
     if (!msg) return;
-    const t = setTimeout(() => setMsg(""), 2000);
+    const t = setTimeout(() => setMsg(""), 3000);
     return () => clearTimeout(t);
   }, [msg]);
+
+  useEffect(() => {
+    if (!applyMessage) return;
+    const t = setTimeout(() => setApplyMessage(""), 3000);
+    return () => clearTimeout(t);
+  }, [applyMessage]);
+
+  useEffect(() => {
+    if (!todayApplyMessage) return;
+    const t = setTimeout(() => setTodayApplyMessage(""), 3000);
+    return () => clearTimeout(t);
+  }, [todayApplyMessage]);
 
   const load = async () => {
     try {
@@ -147,66 +216,84 @@ const approvedWFHDays = getUniqueLeaveDays(
     load();
   }, []);
 
-const apply = async () => {
-  try {
-    await api.post("/leaves", {
-      ...form,
-      responsiblePerson: form.responsiblePerson || null,
-    });
+  const apply = async () => {
+    try {
+      await api.post("/leaves", {
+        ...form,
+        responsiblePerson: form.responsiblePerson || null,
+      });
 
-    setApplied(true);       
-    setMsg("Your leave is successfully sent.");  // only top banner message
+      setApplied(true);
+      setApplyMessage("Your leave is successfully sent.");
+      setMsg("Your leave is successfully sent.");
+      setMsgType("success");
 
-    // Button reset after 2 seconds
-    setTimeout(() => setApplied(false), 2000);
+      // Button & message reset after 2 seconds
+      setTimeout(() => {
+        setApplied(false);
+        setApplyMessage("");
+      }, 2000);
 
-    setForm({
-      type: "PAID",
-      startDate: "",
-      endDate: "",
-      reason: "",
-      responsiblePerson: "",
-    });
+      setForm({
+        type: "CASUAL",
+        startDate: "",
+        endDate: "",
+        reason: "",
+        responsiblePerson: "",
+      });
 
-    load();
-  } catch (err) {
-    setMsg(err.response?.data?.message || "Failed");
-    setMsgType("error");
-  }
-};
+      load();
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || "Failed to apply leave";
+      setApplyMessage(errorMsg);
+      setMsg(errorMsg);
+      setMsgType("error");
+      
+      setTimeout(() => {
+        setApplyMessage("");
+      }, 3000);
+    }
+  };
 
+  const submitTodayLeave = async () => {
+    const today = new Date().toISOString().slice(0, 10);
 
-const submitTodayLeave = async () => {
-  const today = new Date().toISOString().slice(0, 10);
+    try {
+      await api.post("/leaves", {
+        type: todayForm.type,
+        startDate: today,
+        endDate: today,
+        reason: todayForm.reason || "Taking leave today",
+        responsiblePerson: todayForm.responsiblePerson || null,
+      });
 
-  try {
-    await api.post("/leaves", {
-      type: todayForm.type,
-      startDate: today,
-      endDate: today,
-      reason: todayForm.reason || "Taking leave today",
-      responsiblePerson: todayForm.responsiblePerson || null,
-    });
+      setTodayApplyMessage("Your leave is successfully sent.");
+      setMsg("Your leave is successfully sent. Please wait for approval.");
+      setMsgType("success");
 
-    setMsg("Your leave is successfully sent. Please wait for approval.");
-    setMsgType("success");
+      setTodayForm({ type: "CASUAL", reason: "", responsiblePerson: "" });
 
-    setTodayForm({ type: "SICK", reason: "", responsiblePerson: "" });
+      setTodayApplied(true);
 
-    setTodayApplied(true);
+      // ⭐ Auto reset + auto close popup after 2 sec
+      setTimeout(() => {
+        setTodayApplied(false);
+        setTodayApplyMessage("");
+        setShowTodayPopup(false);
+      }, 2000);
 
-    // ⭐ Auto reset + auto close popup after 2 sec
-    setTimeout(() => {
-      setTodayApplied(false);
-      setShowTodayPopup(false);
-    }, 2000);
-
-    load();
-  } catch (err) {
-    setMsg("Failed to apply leave");
-    setMsgType("error");
-  }
-};
+      load();
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || "Failed to apply leave";
+      setTodayApplyMessage(errorMsg);
+      setMsg(errorMsg);
+      setMsgType("error");
+      
+      setTimeout(() => {
+        setTodayApplyMessage("");
+      }, 3000);
+    }
+  };
 
   const updateStatus = async (id, status) => {
     try {
@@ -219,6 +306,7 @@ const submitTodayLeave = async () => {
       setMsgType("error");
     }
   };
+
   return (
     <div className="space-y-10">
       {msg && (
@@ -236,40 +324,42 @@ const submitTodayLeave = async () => {
       <PageTitle title="Leaves" sub="Manage your leaves & WFH" />
 
       {!isAdmin && (
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-5">
-
-         <StatCard
-  icon={<FiCalendar className="text-blue-500" />}
-  title="Leave Days Applied"
-  value={leaves
-    .filter((l) => l.type?.toUpperCase() !== "WFH")
-    .reduce((sum, l) => sum + getDays(l), 0)}
-/>
-
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <StatCard
+            icon={<FiCalendar className="text-blue-500" />}
+            title="Total Leave+Half-Days Applied"
+            value={appliedLeaveDays}
+          />
           <StatCard
             icon={<FiClock className="text-green-500" />}
             title="Approved Leave Days"
             value={approvedLeaveDays}
           />
-
           <StatCard
             icon={<FiPlusCircle className="text-purple-500" />}
             title="WFH Days Applied"
             value={totalWFHDays}
           />
-
           <StatCard
             icon={<FiClock className="text-blue-500" />}
             title="Approved WFH Days"
             value={approvedWFHDays}
           />
-
+          <StatCard
+            icon={<FiCalendar className="text-orange-500" />}
+            title="Half Day Applied"
+            value={totalAppliedHalfDay}
+          />
+          <StatCard
+            icon={<FiClock className="text-green-500" />}
+            title="Half Day Approved"
+            value={approvedHalfDay}
+          />
           <StatCard
             icon={<FiCalendar className="text-red-500" />}
             title="Remaining Leaves"
-            value={`${remainingLeaves} out of ${TOTAL_YEARLY_LEAVES}`}
+            value={`${remainingLeaves} / ${TOTAL_YEARLY_LEAVES}`}
           />
-
         </div>
       )}
 
@@ -284,7 +374,6 @@ const submitTodayLeave = async () => {
               Apply Today Leave/WFH
             </button>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1">
               <label className="font-medium text-gray-600">Leave Type</label>
@@ -297,10 +386,10 @@ const submitTodayLeave = async () => {
                 <option value="UNPAID">Unpaid Leave</option>
                 <option value="SICK">Sick Leave</option>
                 <option value="CASUAL">Casual Leave</option>
+                <option value="HALF_DAY">Half Day</option>
                 <option value="WFH">Work From Home</option>
               </select>
             </div>
-
             <div className="flex flex-col gap-1">
               <label className="font-medium text-gray-600">Start Date</label>
               <input
@@ -312,22 +401,20 @@ const submitTodayLeave = async () => {
                 }
               />
             </div>
-
             <div className="flex flex-col gap-1">
               <label className="font-medium text-gray-600">End Date</label>
               <input
                 type="date"
                 className="p-3 rounded-xl border dark:bg-gray-900 shadow"
                 value={form.endDate}
-                onChange={(e) =>
-                  setForm({ ...form, endDate: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, endDate: e.target.value })}
               />
             </div>
           </div>
-
           <div className="mt-4">
-            <label className="font-medium text-gray-600">Reason (optional)</label>
+            <label className="font-medium text-gray-600">
+              Reason (optional)
+            </label>
             <textarea
               rows={3}
               placeholder="Enter reason..."
@@ -336,7 +423,6 @@ const submitTodayLeave = async () => {
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
             />
           </div>
-
           <div className="mt-4">
             <label className="font-medium text-gray-600">
               Who takes your responsibility? (optional)
@@ -344,32 +430,39 @@ const submitTodayLeave = async () => {
             <EmployeeDropdown
               employees={employees}
               value={form.responsiblePerson}
-              onChange={(val) =>
-                setForm({ ...form, responsiblePerson: val })
-              }
+              onChange={(val) => setForm({ ...form, responsiblePerson: val })}
             />
           </div>
-
- <div className="flex items-center gap-3 mt-6">
-  <button
-    onClick={apply}
-    disabled={applied}
-    className={`px-6 py-3 rounded-xl font-semibold shadow-lg text-white
-      ${applied ? "bg-green-600 cursor-default" : "bg-indigo-600 hover:bg-indigo-700"}
-    `}
-  >
-    {applied ? "Applied ✔" : "Apply"}
-  </button>
-
-  {applied && (
-    <span className="text-green-600 text-sm font-medium">
-      Your leave is successfully sent.
-    </span>
-  )}
-</div>
-
+          <div className="flex items-center gap-3 mt-6">
+            <button
+              onClick={apply}
+              disabled={applied}
+              className={`px-6 py-3 rounded-xl font-semibold shadow-lg text-white
+                ${
+                  applied
+                    ? "bg-green-600 cursor-default"
+                    : "bg-indigo-600 hover:bg-indigo-700"
+                }
+              `}
+            >
+              {applied ? "Applied ✔" : "Apply"}
+            </button>
+            {applyMessage && (
+              <span className={`text-sm font-medium ${
+                applyMessage.includes("already") || 
+                applyMessage.includes("Failed") || 
+                applyMessage.includes("Error") ||
+                applyMessage.includes("Half day leave must be for a single date")
+                  ? "text-red-600"
+                  : "text-green-600"
+              }`}>
+                {applyMessage}
+              </span>
+            )}
+          </div>
         </GlassCard>
       )}
+
       <GlassCard>
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-semibold">Your Leave/WFH History</h3>
@@ -396,7 +489,6 @@ const submitTodayLeave = async () => {
             ))}
           </div>
         )}
-
         {totalPages > 1 && (
           <div className="flex justify-center gap-3 mt-4">
             <button
@@ -419,25 +511,35 @@ const submitTodayLeave = async () => {
       </GlassCard>
 
       {showTodayPopup && (
-<TodayPopup
-  todayForm={todayForm}
-  setTodayForm={setTodayForm}
-  close={() => setShowTodayPopup(false)}
-  submit={submitTodayLeave}
-  employees={employees}
-  todayApplied={todayApplied}   // ⭐ MUST HAVE
-/>
-
+        <TodayPopup
+          todayForm={todayForm}
+          setTodayForm={setTodayForm}
+          close={() => setShowTodayPopup(false)}
+          submit={submitTodayLeave}
+          employees={employees}
+          todayApplied={todayApplied}
+          todayApplyMessage={todayApplyMessage}
+        />
       )}
     </div>
   );
 }
-function TodayPopup({ todayForm, setTodayForm, close, submit, employees, todayApplied }) {
+
+function TodayPopup({
+  todayForm,
+  setTodayForm,
+  close,
+  submit,
+  employees,
+  todayApplied,
+  todayApplyMessage,
+}) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center backdrop-blur-sm z-50 p-4">
       <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl max-w-md w-full shadow-xl border border-gray-300 dark:border-gray-700">
-        
-        <h2 className="text-xl font-semibold mb-4">Apply Today Leave or WFH</h2>
+        <h2 className="text-xl font-semibold mb-4">
+          Apply Today Leave or WFH
+        </h2>
 
         {/* Leave Type */}
         <label className="font-medium text-gray-600">Leave Type</label>
@@ -452,13 +554,14 @@ function TodayPopup({ todayForm, setTodayForm, close, submit, employees, todayAp
           <option value="CASUAL">Casual Leave</option>
           <option value="PAID">Paid Leave</option>
           <option value="UNPAID">Unpaid Leave</option>
+          <option value="HALF_DAY">Half Day</option>
           <option value="WFH">Work From Home</option>
         </select>
 
         {/* Reason */}
         <label className="font-medium text-gray-600">Reason</label>
         <textarea
-          className="p-3 w-full rounded-xl border dark:bg-gray-800 mt-1"
+          className="p-3 w-full rounded-xl border dark:bg-gray-800 mt-1 mb-3"
           rows={3}
           value={todayForm.reason}
           placeholder="Enter Reason..."
@@ -480,11 +583,10 @@ function TodayPopup({ todayForm, setTodayForm, close, submit, employees, todayAp
         />
 
         {/* Buttons Section */}
-        <div className="flex justify- items-center mt-6">
-
+        <div className="flex items-center mt-6">
           {/* Cancel Button */}
           <button
-            className="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-xl"
+            className="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-xl hover:bg-gray-400 dark:hover:bg-gray-600"
             onClick={close}
           >
             Cancel
@@ -495,29 +597,34 @@ function TodayPopup({ todayForm, setTodayForm, close, submit, employees, todayAp
             <button
               disabled={todayApplied}
               className={`px-4 py-2 rounded-xl text-white
-                ${todayApplied ? "bg-green-600 cursor-default" : "bg-indigo-600 hover:bg-indigo-700"}
+                ${
+                  todayApplied
+                    ? "bg-green-600 cursor-default"
+                    : "bg-indigo-600 hover:bg-indigo-700"
+                }
               `}
               onClick={submit}
             >
-              {todayApplied ? "Applied ✔" : "Submit"}
+              {todayApplied ? "Applied ✔" : "Apply"}
             </button>
-
-            {todayApplied && (
-              <span className="text-green-600 text-sm font-medium">
-                Today leave successfully sent.
+            {todayApplyMessage && (
+              <span className={`text-sm font-medium ${
+                todayApplyMessage.includes("already") || 
+                todayApplyMessage.includes("Failed") || 
+                todayApplyMessage.includes("Error") ||
+                todayApplyMessage.includes("Half day leave must be for a single date")
+                  ? "text-red-600"
+                  : "text-green-600"
+              }`}>
+                {todayApplyMessage}
               </span>
             )}
           </div>
-
-          
-
         </div>
-
       </div>
     </div>
   );
 }
-
 
 function LeaveItem({ l, isAdmin, updateStatus }) {
   const getDays = () => {
@@ -525,6 +632,12 @@ function LeaveItem({ l, isAdmin, updateStatus }) {
     const s = new Date(l.startDate);
     const e = new Date(l.endDate);
     return Math.floor((e - s) / (1000 * 60 * 60 * 24)) + 1;
+  };
+
+  const getDisplayDays = () => {
+    if (l.type === "HALF_DAY") return "0.5 day";
+    const days = getDays();
+    return `${days} day${days > 1 ? "s" : ""}`;
   };
 
   return (
@@ -539,6 +652,10 @@ function LeaveItem({ l, isAdmin, updateStatus }) {
             <span className="text-yellow-600">Sick Leave</span>
           ) : l.type === "CASUAL" ? (
             <span className="text-orange-600">Casual Leave</span>
+          ) : l.type === "HALF_DAY" ? (
+            <span className="text-purple-600">Half Day</span>
+          ) : l.type === "UNPAID" ? (
+            <span className="text-gray-600">Unpaid Leave</span>
           ) : (
             l.type
           )}
@@ -548,16 +665,16 @@ function LeaveItem({ l, isAdmin, updateStatus }) {
           {l.startDate?.slice(0, 10)} → {l.endDate?.slice(0, 10)}
         </div>
 
-        <div className="text-xs text-gray-400">{getDays()} day(s)</div>
+        <div className="text-xs text-gray-400">{getDisplayDays()}</div>
 
-        {/* 🌟 EMPLOYEE SEES HIS APPLIED REASON */}
+        {/* Employee sees their applied reason */}
         {l.reason && (
           <div className="text-xs text-gray-500 mt-1">
             <b>Your Reason:</b> {l.reason}
           </div>
         )}
 
-        {/* 🌟 NEW — EMPLOYEE SEES WHY ADMIN REJECTED */}
+        {/* Employee sees why admin rejected */}
         {l.status === "REJECTED" && l.rejectReason && (
           <div className="text-xs text-red-500 mt-1">
             <b>Rejected Reason:</b> {l.rejectReason}

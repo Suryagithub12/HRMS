@@ -29,6 +29,12 @@ function LeaveItem({ l, updateStatus, deleteLeave, openRejectPopup }) {
     return Math.floor((e - s) / (1000 * 60 * 60 * 24)) + 1;
   };
 
+  const getDisplayDays = () => {
+    if (l.type === "HALF_DAY") return "0.5 day";
+    const days = getDays();
+    return `${days} day${days > 1 ? "s" : ""}`;
+  };
+
   return (
     <div className="p-5 rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow relative">
       
@@ -43,22 +49,28 @@ function LeaveItem({ l, updateStatus, deleteLeave, openRejectPopup }) {
       {/* LEFT SECTION */}
       <div>
         <div className="text-lg font-semibold">
-          {l.type === "WFH"
-            ? <span className="text-blue-600">Work From Home</span>
-            : l.type === "PAID"
-            ? <span className="text-green-600">Paid Leave</span>
-            : l.type === "SICK"
-            ? <span className="text-yellow-600">Sick Leave</span>
-            : l.type === "CASUAL"
-            ? <span className="text-orange-600">Casual Leave</span>
-            : l.type}
+          {l.type === "WFH" ? (
+            <span className="text-blue-600">Work From Home</span>
+          ) : l.type === "PAID" ? (
+            <span className="text-green-600">Paid Leave</span>
+          ) : l.type === "SICK" ? (
+            <span className="text-yellow-600">Sick Leave</span>
+          ) : l.type === "CASUAL" ? (
+            <span className="text-orange-600">Casual Leave</span>
+          ) : l.type === "HALF_DAY" ? (
+            <span className="text-purple-600">Half Day</span>
+          ) : l.type === "UNPAID" ? (
+            <span className="text-gray-600">Unpaid Leave</span>
+          ) : (
+            l.type
+          )}
         </div>
 
         <div className="text-sm text-gray-500">
           {l.startDate?.slice(0, 10)} → {l.endDate?.slice(0, 10)}
         </div>
 
-        <div className="text-xs text-gray-400">{getDays()} day(s)</div>
+        <div className="text-xs text-gray-400">{getDisplayDays()}</div>
 
         {l.reason && (
           <div className="text-xs text-gray-500 mt-1">
@@ -66,7 +78,7 @@ function LeaveItem({ l, updateStatus, deleteLeave, openRejectPopup }) {
           </div>
         )}
 
-        {/* NEW — SHOW REJECT REASON IF LEAVE IS REJECTED */}
+        {/* SHOW REJECT REASON IF LEAVE IS REJECTED */}
         {l.status === "REJECTED" && l.rejectReason && (
           <div className="text-xs text-red-500 mt-1">
             <b>Rejected Because:</b> {l.rejectReason}
@@ -96,14 +108,14 @@ function LeaveItem({ l, updateStatus, deleteLeave, openRejectPopup }) {
           <div className="flex gap-2">
             <button
               onClick={() => updateStatus(l.id, "APPROVED")}
-              className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm"
+              className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
             >
               Approve
             </button>
 
             <button
               onClick={() => openRejectPopup(l.id)}
-              className="px-3 py-1 bg-red-600 text-white rounded-lg text-sm"
+              className="px-3 py-1 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
             >
               Reject
             </button>
@@ -145,7 +157,7 @@ export default function LeavesAdmin() {
 
   useEffect(() => {
     if (!msg) return;
-    const t = setTimeout(() => setMsg(""), 2000);
+    const t = setTimeout(() => setMsg(""), 3000);
     return () => clearTimeout(t);
   }, [msg]);
 
@@ -165,35 +177,42 @@ export default function LeavesAdmin() {
     load();
   }, []);
 
-  // APPROVE
+  // APPROVE - Now shows backend custom message
   const updateStatus = async (id, status) => {
     try {
-      await api.patch(`/leaves/${id}/approve`, { action: status });
-      setMsg(`Leave ${status.toLowerCase()}`);
+      const response = await api.patch(`/leaves/${id}/approve`, { action: status });
+      
+      // ✨ Use backend message if available, otherwise fallback
+      const successMessage = response.data?.message || `Leave ${status.toLowerCase()}`;
+      
+      setMsg(successMessage);
       setMsgType("success");
       load();
     } catch (err) {
-      setMsg(err?.response?.data?.message || "Failed");
+      setMsg(err?.response?.data?.message || "Failed to update leave status");
       setMsgType("error");
     }
   };
 
-  // REJECT WITH REASON
+  // REJECT WITH REASON - Now shows backend custom message
   const submitReject = async (reason) => {
     try {
-      await api.patch(`/leaves/${rejectId}/approve`, {
+      const response = await api.patch(`/leaves/${rejectId}/approve`, {
         action: "REJECTED",
         reason,
       });
 
-      setMsg("Leave rejected");
+      // ✨ Use backend message if available
+      const successMessage = response.data?.message || "Leave rejected";
+
+      setMsg(successMessage);
       setMsgType("success");
 
       setRejectOpen(false);
       setRejectId(null);
       load();
     } catch (err) {
-      setMsg("Failed to reject");
+      setMsg(err?.response?.data?.message || "Failed to reject leave");
       setMsgType("error");
     }
   };
@@ -204,17 +223,22 @@ export default function LeavesAdmin() {
     setConfirmOpen(true);
   };
 
+  // DELETE - Now shows backend custom message
   const confirmDelete = async () => {
     try {
-      await api.delete(`/leaves/${deleteId}`);
-      setMsg("Leave deleted");
+      const response = await api.delete(`/leaves/${deleteId}`);
+      
+      // ✨ Use backend message if available
+      const successMessage = response.data?.message || "Leave deleted";
+
+      setMsg(successMessage);
       setMsgType("success");
 
       setConfirmOpen(false);
       setDeleteId(null);
       load();
     } catch (err) {
-      setMsg("Delete failed");
+      setMsg(err?.response?.data?.message || "Failed to delete leave");
       setMsgType("error");
     }
   };
@@ -225,8 +249,8 @@ export default function LeavesAdmin() {
         <div
           className={`p-3 rounded-xl text-center text-sm ${
             msgType === "success"
-              ? "bg-green-100 text-green-700"
-              : "bg-red-100 text-red-700"
+              ? "bg-green-100 text-green-700 border border-green-300"
+              : "bg-red-100 text-red-700 border border-red-300"
           }`}
         >
           {msg}
@@ -240,6 +264,10 @@ export default function LeavesAdmin() {
 
         {loading ? (
           <div className="text-center py-6">Loading...</div>
+        ) : paginatedLeaves.length === 0 ? (
+          <p className="text-center text-gray-500 dark:text-gray-400 py-6">
+            No leave requests found
+          </p>
         ) : (
           <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
             {paginatedLeaves.map((l) => (
@@ -260,15 +288,19 @@ export default function LeavesAdmin() {
             <button
               disabled={page === 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="px-3 py-1 bg-gray-300 dark:bg-gray-700 rounded"
+              className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm disabled:opacity-40"
             >
-              ⬅ Prev
+              ⬅ Previous
             </button>
+
+            <span className="text-xs text-gray-500 dark:text-gray-400 self-center">
+              Page {page} / {totalPages}
+            </span>
 
             <button
               disabled={page === totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="px-3 py-1 bg-gray-300 dark:bg-gray-700 rounded"
+              className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm disabled:opacity-40"
             >
               Next ➜
             </button>
