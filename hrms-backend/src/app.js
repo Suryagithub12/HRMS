@@ -42,6 +42,7 @@ const allowedOrigins = [
   "https://hrms-xi-neon.vercel.app",
   "http://localhost:4000",
   "https://agilityai.in",
+  "https://www.agilityai.in",
   process.env.CLIENT_URL, // optional
 ].filter(Boolean);
 
