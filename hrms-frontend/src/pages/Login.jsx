@@ -32,34 +32,33 @@ export default function Login() {
   // ============================
   // LOGIN SUBMIT — UPDATED
   // ============================
-  const submit = async (e) => {
-    e.preventDefault();
-    setErrMsg("");
-    setLoading(true);
+const submit = async (e) => {
+  e.preventDefault();
+  setErrMsg("");
+  setLoading(true);
 
-    try {
-      const res = await api.post("/auth/login", { email, password, loginType });
-      const { accessToken, user } = res.data; // ⬅️ refreshToken removed
+  try {
+    const res = await api.post("/auth/login", { email, password, loginType });
+    const { accessToken, user } = res.data;
 
-      // Save only access token
-      localStorage.setItem("hrms_access", accessToken);
+    localStorage.setItem("hrms_access", accessToken);
+    api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
 
-      // Set default header
-      api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+    // ✅ FULL USER SHOULD COME FROM LOGIN
+    setAuth(user, accessToken);
 
-      // Updated setAuth (no refreshToken)
-      setAuth(user, accessToken);
-
-      // Redirect
-      if (user.role === "ADMIN") navigate("/dashboard");
-      else navigate("/attendance");
-
-    } catch (err) {
-      setErrMsg(err.response?.data?.message || "Invalid credentials");
-    } finally {
-      setLoading(false);
+    if (user.role === "ADMIN") {
+      navigate("/dashboard");
+    } else {
+      navigate("/attendance");
     }
-  };
+
+  } catch (err) {
+    setErrMsg(err.response?.data?.message || "Invalid credentials");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center relative px-6 overflow-hidden
@@ -182,10 +181,10 @@ export default function Login() {
           {/* ROLE SELECTOR */}
           <div className="flex justify-center gap-2 mb-6">
             {[
-              { label: "Admin", value: "ADMIN" },
-              { label: "Agility AI", value: "AGILITY" },
-              { label: "Lyfshilp", value: "LYFSHILP" },
-            ].map((r) => (
+  { label: "Admin", value: "ADMIN" },
+  { label: "Agility AI", value: "AGILITY_EMPLOYEE" },
+  { label: "Lyfshilp", value: "LYF_EMPLOYEE" },
+].map((r) => (
               <button
                 key={r.value}
                 onClick={() => setLoginType(r.value)}
@@ -257,7 +256,7 @@ export default function Login() {
           </form>
 
           <p className="mt-6 text-center text-xs text-gray-600 dark:text-gray-400">
-            © {new Date().getFullYear()} HRMS — Agility AI & Lyfshilp Academy
+            © {new Date().getFullYear()} HRMS - Agility AI & Lyfshilp Academy
           </p>
         </div>
       </div>

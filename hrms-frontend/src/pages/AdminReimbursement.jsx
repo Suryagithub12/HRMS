@@ -33,6 +33,32 @@ export default function AdminReimbursement() {
     loadAll();
   }, []);
 
+  /* ================= EXPORT ================= */
+/* ================= EXPORT (FIXED) ================= */
+const exportData = async (format) => {
+  try {
+    const res = await api.get(
+      `/reimbursement/export?format=${format}`,
+      { responseType: "blob" } // 👈 MOST IMPORTANT
+    );
+
+    const blob = new Blob([res.data]);
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `reimbursements.${format === "csv" ? "csv" : "xlsx"}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("EXPORT ERROR:", err.response || err);
+    alert("Export failed");
+  }
+};
+
   /** Approve OR open reason popup **/
   const updateStatus = async (id, status) => {
     if (status === "REJECTED") {
@@ -80,13 +106,38 @@ export default function AdminReimbursement() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 space-y-6">
-      <h1 className="text-2xl font-bold dark:text-white">Reimbursement Requests</h1>
+      {/* HEADER */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold dark:text-white">
+          Reimbursement Requests
+        </h1>
+
+        {/* EXPORT BUTTONS */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportData("csv")}
+            className="px-4 py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+          >
+            Export CSV
+          </button>
+          <button
+            onClick={() => exportData("xlsx")}
+            className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"
+          >
+            Export Excel
+          </button>
+        </div>
+      </div>
 
       <div className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow border dark:border-gray-700">
         {loading ? (
-          <p className="text-center text-gray-500 dark:text-gray-400">Loading...</p>
+          <p className="text-center text-gray-500 dark:text-gray-400">
+            Loading...
+          </p>
         ) : list.length === 0 ? (
-          <p className="text-center text-gray-500 dark:text-gray-400">No requests</p>
+          <p className="text-center text-gray-500 dark:text-gray-400">
+            No requests
+          </p>
         ) : (
           <div className="space-y-5">
             {list.map((r) => (
@@ -127,14 +178,15 @@ export default function AdminReimbursement() {
                       key={b.id}
                       href={b.fileUrl}
                       target="_blank"
-                      className="text-blue-600 underline text-sm"
+                      rel="noreferrer"
+                      className="text-blue-600 underline text-sm block"
                     >
                       ₹{b.amount} — {b.note || "Bill"}
                     </a>
                   ))}
                 </div>
 
-                {/* SHOW REJECT REASON LIKE LEAVES */}
+                {/* REJECT REASON */}
                 {r.status === "REJECTED" && r.rejectReason && (
                   <p className="text-red-500 text-xs mt-2">
                     <b>Rejected Because:</b> {r.rejectReason}
@@ -145,13 +197,9 @@ export default function AdminReimbursement() {
                   {new Date(r.createdAt).toLocaleString()}
                 </p>
 
-                {/* ACTION BUTTONS — ONLY WHEN PENDING */}
+                {/* ACTIONS */}
                 {r.status === "PENDING" && (
                   <div className="flex gap-3 mt-4">
-                    <span className="px-4 py-1 rounded-full bg-yellow-500 text-white text-sm font-semibold">
-                      PENDING
-                    </span>
-
                     <button
                       onClick={() => updateStatus(r.id, "APPROVED")}
                       className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm"
@@ -168,7 +216,6 @@ export default function AdminReimbursement() {
                   </div>
                 )}
 
-                {/* SHOW COMPACT BADGE ON APPROVED/REJECTED LIKE LEAVES */}
                 {r.status !== "PENDING" && (
                   <div className="mt-3">
                     <span

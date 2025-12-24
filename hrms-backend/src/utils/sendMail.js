@@ -1,100 +1,84 @@
 import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.gmail.com",
-  port: Number(process.env.SMTP_PORT || 587),
-  secure: process.env.SMTP_SECURE === "true",
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
+  secure: false,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
 });
+export const sendRequestNotificationMail = async ({
+  to,
+  subject,
+  title,
+  employeeName,
+  details,
+}) => {
+  await transporter.sendMail({
+    from: `"HRMS" <${process.env.SMTP_USER}>`,
+    to,
+    subject,
+    html: `
+      <div style="font-family:Arial; line-height:1.6">
+        <h2>${title}</h2>
 
-// Convert form data to HTML
-const formDataToHtml = (formData = {}) => {
-  let rows = "";
+        <p><b>Employee:</b> ${employeeName}</p>
 
-  for (const key of Object.keys(formData)) {
-    const val = formData[key] == null ? "" : String(formData[key])
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+        <p><b>Details:</b></p>
+        <ul>
+          ${details.map(d => `<li>${d}</li>`).join("")}
+        </ul>
 
-    rows += `
-      <tr>
-        <td style="padding:6px;border:1px solid #eee;font-weight:600;">${key}</td>
-        <td style="padding:6px;border:1px solid #eee;">${val}</td>
-      </tr>`;
-  }
+        <p>
+          Please login to HRMS to review this request.
+        </p>
 
-  return `<table style="border-collapse:collapse;width:100%;">${rows}</table>`;
-};
+        <p>
+          <a href="${process.env.FRONTEND_URL}">
+            Open HRMS
+          </a>
+        </p>
 
-/**
- * ✔ Send confirmation to user
- */
-export const sendMailToUser = async ({ email, name, formName }) => {
-  if (!email) return;
-
-  const fromAddr = process.env.FROM_EMAIL || process.env.SMTP_USER;
-
-  const html = `
-    <div style="font-family:Arial;">
-      <h3>Hi ${name || "there"},</h3>
-      <p>Thank you for filling out the <strong>${formName}</strong> form.</p>
-      <p>We will get back to you shortly.</p>
-      <br>
-      <p>Regards,<br>Lyfshilp Academy Team</p>
-    </div>
-  `;
-
-  return transporter.sendMail({
-    from: `"Lyfshilp Academy" <${fromAddr}>`,
-    to: email,
-    subject: `Thanks for submitting the ${formName} form`,
-    html,
+        <br/>
+        <p>HRMS System</p>
+      </div>
+    `,
   });
 };
 
-/**
- * ✔ Send form to Admins
- */
-export const sendMailToAdmins = async ({ formName, name, email, formData = {}, meta = {} }) => {
-  const adminList = (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+export const sendUserCredentialsMail = async ({
+  to,
+  name,
+  email,
+  password,
+}) => {
+  await transporter.sendMail({
+    from: `"HRMS" <${process.env.SMTP_USER}>`,
+    to,
+    subject: "Your HRMS Login Credentials",
+    html: `
+      <div style="font-family:Arial; line-height:1.6">
+        <h2>Welcome to HRMS, ${name}</h2>
 
-  if (adminList.length === 0) {
-    throw new Error("No admin emails configured in ADMIN_EMAILS");
-  }
+        <p>Your account has been created by Admin.</p>
 
-  const submittedAt = meta.submittedAt || new Date().toISOString();
+        <p><strong>Login Details:</strong></p>
+        <ul>
+          <li>Email: <b>${email}</b></li>
+          <li>Password: <b>${password}</b></li>
+        </ul>
 
-  const html = `
-    <div style="font-family:Arial;">
-      <h3>New form submission — ${formName}</h3>
-      <p><strong>Name:</strong> ${name || "—"}</p>
-      <p><strong>Email:</strong> ${email || "—"}</p>
-      <p><strong>Submitted at:</strong> ${new Date(submittedAt).toLocaleString()}</p>
-
-      ${formDataToHtml(formData)}
-
-      <hr/>
-      <p style="font-size:12px;color:#666;">
-        Page: ${meta.path || "unknown"} |
-        User Agent: ${meta.userAgent || "unknown"}
-      </p>
-    </div>
-  `;
-
-  const fromAddr = process.env.FROM_EMAIL || process.env.SMTP_USER;
-
-  return transporter.sendMail({
-    from: `"Lyfshilp Notifications" <${fromAddr}>`,
-    to: adminList,
-    subject: `[Lyfshilp] New ${formName} submission — ${name || ""}`,
-    html,
-    replyTo: email || undefined,
+        <p>
+          Login here:
+          <a href="${process.env.FRONTEND_URL}">
+            ${process.env.FRONTEND_URL}
+          </a>
+        </p
+        <br/>
+        <p>HRMS Team</p>
+      </div>
+    `,
   });
 };

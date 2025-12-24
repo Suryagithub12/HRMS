@@ -35,6 +35,7 @@ export default function Employees() {
     email: "",
     role: "AGILITY_EMPLOYEE",
     departmentId: "",
+    departmentIds: [],
     password: "",
   };
   const [form, setForm] = useState(emptyForm);
@@ -84,6 +85,7 @@ export default function Employees() {
       email: u.email,
       role: u.role,
       departmentId: u.departmentId || "",
+      departmentIds: u.departments?.map(d => d.department.id) || [],
       password: "",
     });
     setErrorMsg("");
@@ -91,27 +93,23 @@ export default function Employees() {
   };
 
   /* Save user */
-  const submit = async (e) => {
-    e.preventDefault();
-    setErrorMsg("");
+const submit = async (e) => {
+  e.preventDefault();
+  setErrorMsg("");
 
-    try {
-      if (editUser) {
-        await api.put(`/users/${editUser.id}`, form);
-        setMsg("Employee updated successfully");
-        setMsgType("success");
-      } else {
-        await api.post(`/users`, form);
-        setMsg("Employee created successfully");
-        setMsgType("success");
-      }
+  try {
+    await api[editUser ? "put" : "post"](
+      editUser ? `/users/${editUser.id}` : "/users",
+      form
+    );
 
-      setModalOpen(false);
-      load();
-    } catch (err) {
-      setErrorMsg(err.response?.data?.message || "Error saving user");
-    }
-  };
+    setMsg(editUser ? "Employee updated successfully" : "Employee created successfully");
+    setModalOpen(false);
+    load();
+  } catch (err) {
+    setErrorMsg(err.response?.data?.message || "Error saving user");
+  }
+};
 
   /* Ask for delete */
   const askDelete = (id) => {
@@ -291,7 +289,10 @@ function EmployeesTable({ users, askDelete, openEdit, me, departments, navigate 
 
             <p className="text-sm text-gray-700 dark:text-gray-300">
               <strong>Department:</strong>{" "}
-              {departments.find((d) => d.id === u.departmentId)?.name || "-"}
+              {u.departments?.length
+  ? u.departments.map(d => d.department.name).join(", ")
+  : departments.find(dep => dep.id === u.departmentId)?.name || "-"}
+
             </p>
 
             {me?.role === "ADMIN" && (
@@ -352,7 +353,10 @@ function EmployeesTable({ users, askDelete, openEdit, me, departments, navigate 
                 <td className="p-3 text-sm whitespace-nowrap">{u.role}</td>
 
                 <td className="p-3 text-sm whitespace-nowrap">
-                  {departments.find((d) => d.id === u.departmentId)?.name || "-"}
+                {u.departments?.length
+  ? u.departments.map(d => d.department.name).join(", ")
+  : departments.find(dep => dep.id === u.departmentId)?.name || "-"}
+
                 </td>
 
                 {me?.role === "ADMIN" && (
@@ -443,38 +447,66 @@ function UserForm({ form, setForm, submit, close, editUser, errorMsg, me, depart
           </select>
         )}
 
-        <select
-          className="input"
-          value={form.departmentId}
-          onChange={(e) => update("departmentId", e.target.value)}
-        >
-          <option value="">Select Department</option>
-          {departments.map((dep) => (
-            <option key={dep.id} value={dep.id}>
-              {dep.name}
-            </option>
-          ))}
-        </select>
+{form.role !== "ADMIN" && (
+  <div className="space-y-2">
+    <label className="text-sm text-gray-600 dark:text-gray-300">
+      Departments
+    </label>
 
-        {!editUser && (
-          <div className="relative">
+    <div className="border rounded-lg p-3 max-h-40 overflow-y-auto bg-gray-50 dark:bg-gray-800">
+      {departments.map((dep) => {
+        const checked = form.departmentIds.includes(dep.id);
+
+        return (
+          <label
+            key={dep.id}
+            className="flex items-center gap-2 text-sm cursor-pointer py-1"
+          >
             <input
-              className="input pr-10"
-              type={showPassword ? "text" : "password"}
-              placeholder="Password"
-              value={form.password}
-              onChange={(e) => update("password", e.target.value)}
+              type="checkbox"
+              checked={checked}
+              onChange={(e) => {
+                setForm((prev) => ({
+                  ...prev,
+                  departmentIds: e.target.checked
+                    ? [...prev.departmentIds, dep.id]
+                    : prev.departmentIds.filter((id) => id !== dep.id),
+                }));
+              }}
+              className="accent-indigo-600"
             />
 
-            <button
-              type="button"
-              onClick={() => setShowPassword((prev) => !prev)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-300"
-            >
-              {showPassword ? <FiEye size={18} /> : <FiEyeOff size={18} />}
-            </button>
-          </div>
-        )}
+            <span>{dep.name}</span>
+          </label>
+        );
+      })}
+
+      {departments.length === 0 && (
+        <p className="text-xs text-gray-500">No departments available</p>
+      )}
+    </div>
+  </div>
+)}
+
+{me?.role === "ADMIN" && (
+  <div className="relative">
+    <input
+      className="input pr-10"
+      type={showPassword ? "text" : "password"}
+      placeholder={editUser ? "New password (optional)" : "Password"}
+      value={form.password}
+      onChange={(e) => update("password", e.target.value)}
+    />
+
+    <button
+      type="button"
+      onClick={() => setShowPassword((p) => !p)}
+      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-300"
+    >
+      {showPassword ? <FiEye size={18} /> : <FiEyeOff size={18} />}
+    </button>
+  </div>
+)}
 
         <div className="flex justify-end gap-2 sm:gap-3 pt-3">
           <button

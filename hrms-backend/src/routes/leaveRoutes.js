@@ -12,42 +12,61 @@ import { requireAuth } from "../middlewares/auth.js";
 
 const router = express.Router();
 
-/* EMPLOYEE: Create Leave */
+/* =====================================================
+   EMPLOYEE — CREATE LEAVE
+===================================================== */
 router.post(
   "/",
   requireAuth(["AGILITY_EMPLOYEE", "LYF_EMPLOYEE"]),
   createLeave
 );
 
-/* ADMIN + EMPLOYEE: List Leaves */
+/* =====================================================
+   LIST LEAVES
+   - Employee → own
+   - Manager → dept employees (controller handles)
+   - Admin → all
+===================================================== */
 router.get(
   "/",
   requireAuth(["ADMIN", "AGILITY_EMPLOYEE", "LYF_EMPLOYEE"]),
   listLeaves
 );
 
-/* ADMIN + EMPLOYEE: Get One Leave */
+/* =====================================================
+   GET SINGLE LEAVE
+===================================================== */
 router.get(
   "/:id",
   requireAuth(["ADMIN", "AGILITY_EMPLOYEE", "LYF_EMPLOYEE"]),
   getLeaveById
 );
 
-/* EMPLOYEE: update own leave + Admin: update any leave */
+/* =====================================================
+   UPDATE LEAVE
+   - Employee → own pending
+   - Admin → any
+===================================================== */
 router.put(
   "/:id",
   requireAuth(["ADMIN", "AGILITY_EMPLOYEE", "LYF_EMPLOYEE"]),
   updateLeave
 );
 
-/* ⭐ FIXED: Approve / Reject */
+/* =====================================================
+   ⭐ APPROVE / REJECT (ONE SINGLE API)
+   - Admin → any leave
+   - Manager → only department employees
+===================================================== */
 router.patch(
   "/:id/approve",
-  requireAuth(["ADMIN"]),
+  requireAuth(["ADMIN", "AGILITY_EMPLOYEE", "LYF_EMPLOYEE"]),
   approveLeave
 );
 
-/* Delete Leave */
+/* =====================================================
+   DELETE LEAVE
+===================================================== */
 router.delete(
   "/:id",
   requireAuth(["ADMIN", "AGILITY_EMPLOYEE", "LYF_EMPLOYEE"]),
