@@ -259,6 +259,7 @@ const submitReject = async (reason) => {
   // DELETE - Now shows backend custom message
   const confirmDelete = async () => {
     try {
+      setDeleteLoadingId(deleteId);  
       const response = await api.delete(`/leaves/${deleteId}`);
       
       // ✨ Use backend message if available
@@ -273,7 +274,9 @@ const submitReject = async (reason) => {
     } catch (err) {
       setMsg(err?.response?.data?.message || "Failed to delete leave");
       setMsgType("error");
-    }
+    }finally {
+     setDeleteLoadingId(null); 
+  }
   };
 
   return (

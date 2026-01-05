@@ -81,6 +81,14 @@ export default function Leaves() {
   const [showDelete, setShowDelete] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
 
+  const calcLeaveDays = (startDate, endDate) => {
+  if (!startDate || !endDate) return 0;
+  const s = new Date(startDate);
+  const e = new Date(endDate);
+  return Math.floor((e - s) / (1000 * 60 * 60 * 24)) + 1;
+};
+
+
   const [form, setForm] = useState({
     type: "CASUAL",
     startDate: "",
@@ -239,6 +247,16 @@ const confirmDeleteLeave = async () => {
 
 const apply = async () => {
   
+  const days = calcLeaveDays(form.startDate, form.endDate);
+
+  // 🔥 RULE: 3+ days → reason compulsory
+  if (days >= 3 && !form.reason.trim()) {
+    setApplyMessage("Reason is mandatory for leave of 3 days or more");
+    setMsg("Reason is mandatory for leave of 3 days or more");
+    setMsgType("error");
+    return;
+  }
+
    if (form.type === "COMP_OFF" && (user?.compOffBalance ?? 0) <= 0) {
    setMsg("You don't have Comp-Off balance");
    setMsgType("error");
@@ -455,12 +473,15 @@ const apply = async () => {
             </div>
           </div>
           <div className="mt-4">
-            <label className="font-medium text-gray-600">
-              Reason (optional)
-            </label>
+           <label className="font-medium text-gray-600">
+  Reason {calcLeaveDays(form.startDate, form.endDate) >= 3 && (
+    <span className="text-red-500">*</span>
+  )}
+</label>
+
             <textarea
               rows={3}
-              placeholder="Enter reason..."
+              placeholder={calcLeaveDays(form.startDate, form.endDate) >= 3 ? "Reason is required beyond three days leave": "Enter reason (optional)" }
               className="p-3 w-full rounded-xl border dark:bg-gray-900 shadow"
               value={form.reason}
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
@@ -741,6 +762,15 @@ function LeaveItem({ l, isAdmin, updateStatus, onDelete }) {
           </div>
         )}
 
+{/* Responsible person (if assigned) */}
+{l.responsiblePerson && (
+  <div className="text-xs text-gray-500 mt-1">
+    <b>Responsible:</b>{" "}
+    {l.responsiblePerson.firstName}{" "}
+    {l.responsiblePerson.lastName || ""}
+  </div>
+)}
+
         {/* Employee sees why admin rejected */}
         {l.status === "REJECTED" && l.rejectReason && (
           <div className="text-xs text-red-500 mt-1">
@@ -751,7 +781,9 @@ function LeaveItem({ l, isAdmin, updateStatus, onDelete }) {
 {!isAdmin && l.status === "PENDING" && (
   <button
     onClick={() => onDelete(l.id)}
-    className="absolute top-3 right-3 text-red-500 hover:text-red-700 font-bold text-xl"
+    className="absolute top-4 right-4 text-red-500 hover:text-red-700 
+           font-bold text-lg bg-white dark:bg-gray-900 
+           rounded-full w-7 h-7 flex items-center justify-center shadow"
     title="Delete leave"
   >
     ✕
