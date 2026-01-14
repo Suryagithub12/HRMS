@@ -2,14 +2,39 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../api/axios";
-import {
-  FiMail,
-  FiUser,
-  FiBriefcase,
-  FiCalendar,
-  FiClock,
-  FiCreditCard,
-} from "react-icons/fi";
+import { FiMail, FiUser, FiBriefcase, FiCalendar,  FiClock, FiCreditCard,} from "react-icons/fi";
+
+const getWeekOffLabel = (weekOff) => {
+  if (!weekOff) return "Not Assigned";
+  if (weekOff.isFixed && weekOff.offDay) {
+    return `${weekOff.offDay}`;
+  }
+  if (!weekOff.isFixed && weekOff.offDate) {
+    return new Date(weekOff.offDate).toLocaleDateString();
+  }
+  return "Not Assigned";
+};
+const formatTime = (v) =>
+  v
+    ? new Date(v).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "--";
+
+const getLeaveLabel = (type) => {
+  const map = {
+    HALF_DAY: "Half Day",
+    WFH: "WFH",
+    COMP_OFF: "Comp-Off",
+    PAID: "Leave",
+    SICK: "Sick Leave",
+    CASUAL: "Casual Leave",
+    UNPAID: "Unpaid Leave",
+  };
+  return map[type] || "Leave";
+};
+
 
 export default function EmployeeView() {
   const { id } = useParams();
@@ -21,11 +46,16 @@ export default function EmployeeView() {
 
 const load = async () => {
   try {
-    const r = await api.get(`/users/${id}/details`);
-   setEmp({
-   ...r.data.user,
-    stats: r.data.stats,
-   });
+    const [userRes, weekOffRes] = await Promise.all([
+      api.get(`/users/${id}/details`),
+      api.get(`/weekly-off/me`)
+    ]);
+
+    setEmp({
+      ...userRes.data.user,
+      stats: userRes.data.stats,
+      weeklyOff: weekOffRes.data.weekOff,
+    });
   } catch (e) {
     console.error(e);
   }
@@ -71,6 +101,11 @@ const load = async () => {
   icon={<FiBriefcase />} 
 />
             <QuickInfo label="Leave Balance" value={emp.leaveBalance ?? 0} icon={<FiCalendar />} />
+            <QuickInfo
+  label="Assigned Week Off"
+  value={getWeekOffLabel(emp.weeklyOff)}
+  icon={<FiCalendar />}
+/>
             <QuickInfo label="Joined" value={new Date(emp.createdAt).toLocaleDateString()} icon={<FiCalendar />} />
             <QuickInfo label="Active" value={emp.isActive ? "Yes" : "No"} icon={<FiUser />} />
           </div>
@@ -153,7 +188,7 @@ function AttendanceSection({ emp, limit, setLimit }) {
     <Section title="Attendance Summary">
       <div className="grid sm:grid-cols-2 gap-4">
         <InfoCard label="Total Records" value={emp.attendances.length} icon={<FiClock />} />
-        <InfoCard label="Present Days" value={emp.attendances.filter(a => a.checkIn).length} icon={<FiClock />} />
+        <InfoCard label="Present Days" value={emp.attendances.filter( a => a.status === "PRESENT").length} icon={<FiClock />} />
       </div>
 
       <ListContainer>
@@ -161,7 +196,7 @@ function AttendanceSection({ emp, limit, setLimit }) {
           <ListItem
             key={a.id}
             left={new Date(a.date).toLocaleDateString()}
-            right={`IN: ${a.checkIn ? a.checkIn.slice(11, 16) : "--"} | OUT: ${a.checkOut ? a.checkOut.slice(11, 16) : "--"}`}
+            right={`In: ${formatTime(a.checkIn)} | Out: ${formatTime(a.checkOut)}`}
           />
         ))}
       </ListContainer>
@@ -202,8 +237,13 @@ function LeavesSection({ emp, limit, setLimit }) {
   value={emp.leaveBalance ?? 0}
   icon={<FiCalendar />}
 />
+<InfoCard
+  label="Available CompOff Leaves"
+  value={emp.compOffBalance ?? 0}
+  icon={<FiCalendar />}
+/>
         <InfoCard
-          label="Remaining"
+          label="Remaining Leaves"
           value={`${stats.remainingLeaves ?? 0} / ${stats.yearlyQuota ?? 21}`}
           icon={<FiCalendar />}
         />
@@ -219,13 +259,9 @@ function LeavesSection({ emp, limit, setLimit }) {
               key={l.id}
               left={
                 <div className="flex flex-col">
-                  <span className="font-semibold">
-                    {l.type === "HALF_DAY"
-                      ? "Half Day"
-                      : l.type === "WFH"
-                      ? "WFH"
-                      : "Leave"}
-                  </span>
+<span className="font-semibold">
+  {getLeaveLabel(l.type)}
+</span>
                   <span className="text-xs text-gray-500">
                     {new Date(l.startDate).toLocaleDateString()}{" "}
                     {l.endDate &&

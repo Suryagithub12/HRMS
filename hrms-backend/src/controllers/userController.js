@@ -534,7 +534,10 @@ export const getUserFullDetails = async (req, res) => {
           include: { department: true },
         },
         attendances: true,
-        leaves: true,
+leaves: {
+  where: { isAdminDeleted: false },
+  orderBy: { createdAt: "desc" },
+},
         payrolls: true,
         notifications: true,
         resignations: {
@@ -561,7 +564,10 @@ export const getUserFullDetails = async (req, res) => {
             include: { department: true },
           },
           attendances: true,
-          leaves: true,
+         leaves: {
+  where: { isAdminDeleted: false },
+  orderBy: { createdAt: "desc" },
+},
           payrolls: true,
           notifications: true,
           resignations: {
@@ -583,18 +589,28 @@ export const getUserFullDetails = async (req, res) => {
         new Date(l.endDate) <= yearEnd
     );
 
-    const totalLeaves = getUniqueLeaveUnits(
-      yearlyLeaves.filter((l) => l.type !== "WFH")
-    );
+const totalLeaves = getUniqueLeaveUnits(
+  yearlyLeaves.filter(
+    (l) =>!["WFH", "UNPAID", "COMP_OFF"].includes(l.type)
+  )
+);
 
-    const approvedLeaves = getUniqueLeaveUnits(
-      yearlyLeaves.filter(
-        (l) =>
-          l.status === "APPROVED" &&
-          l.type !== "WFH" &&
-          l.type !== "UNPAID"
-      )
-    );
+const approvedNormalLeaves = getUniqueLeaveUnits(
+  yearlyLeaves.filter(
+    (l) =>
+      l.status === "APPROVED" &&
+      !["WFH", "UNPAID", "COMP_OFF"].includes(l.type)
+  )
+);
+
+const approvedCompOffLeaves = getUniqueLeaveUnits(
+  yearlyLeaves.filter(
+    (l) =>
+      l.status === "APPROVED" &&
+      l.type === "COMP_OFF"
+  )
+);
+
 
     const wfhDays = getUniqueLeaveUnits(
       yearlyLeaves.filter(
@@ -602,17 +618,18 @@ export const getUserFullDetails = async (req, res) => {
       )
     );
 
-    const remainingLeaves = Math.max(
-      TOTAL_YEARLY_LEAVES - approvedLeaves,
-      0
-    );
+const remainingLeaves = Math.max(
+  TOTAL_YEARLY_LEAVES - approvedNormalLeaves,
+  0
+);
 
     return res.json({
       success: true,
       user,
       stats: {
         totalLeaves,
-        approvedLeaves,
+        approvedLeaves: approvedNormalLeaves,
+        approvedCompOffLeaves,
         remainingLeaves,
         wfhDays,
         yearlyQuota: TOTAL_YEARLY_LEAVES,

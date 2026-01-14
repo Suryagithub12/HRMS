@@ -4,27 +4,33 @@ import prisma from "../prismaClient.js";
 const calcDays = (start, end) =>
   Math.floor((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)) + 1;
 
-/* ===================== COMMON RULES ===================== */
+/* ===================== RULES ===================== */
 // 1. Comp-off leave apply only if balance >= required
 // 2. On final approval → Balance deduct
-// 3. Admin can grant manual comp-off (extra work)
-// 4. Attendance Weekly-Off present → auto grant (already integrated earlier)
+// 3. Admin can grant manual comp-off
+// 4. Used comp-off cannot be deleted
+// 5. Leave once processed cannot be re-approved
 
 /* ------------------------------------------------------------------
-   1️⃣ Employee → Apply Comp-Off Leave Request (*no auto approve here*)
+   1️⃣ Employee → Apply Comp-Off Leave (NO auto-approve)
 ------------------------------------------------------------------ */
 export const applyCompOffLeave = async (req, res) => {
   try {
     const { startDate, endDate, reason } = req.body;
 
-    if (!startDate || !endDate)
-      return res.status(400).json({ success: false, message: "Date required" });
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Start & End date required"
+      });
+    }
 
-    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id }
+    });
 
     const days = calcDays(startDate, endDate);
 
-    // ❗ Comp-Off Balance Check
     if (user.compOffBalance < days) {
       return res.status(400).json({
         success: false,
@@ -43,83 +49,110 @@ export const applyCompOffLeave = async (req, res) => {
       }
     });
 
-    return res.json({ success: true, message: "Comp-Off leave request submitted", leave });
+    return res.json({
+      success: true,
+      message: "Comp-Off leave request submitted",
+      leave
+    });
 
   } catch (e) {
-    console.log("applyCompOffLeave:", e);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    console.error("applyCompOffLeave:", e);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
   }
 };
 
-
-
-
 /* ------------------------------------------------------------------
-   2️⃣ Admin/Manager → Approve or Reject Comp-Off Leave
+   2️⃣ Admin/Manager → Approve / Reject Comp-Off Leave
 ------------------------------------------------------------------ */
 export const approveCompOffLeave = async (req, res) => {
   try {
     const { id } = req.params;
     const { action, reason } = req.body;
 
-    if (!["APPROVED", "REJECTED"].includes(action))
-      return res.status(400).json({ success: false, message: "Invalid action" });
-
-    const leave = await prisma.leave.findUnique({ where: { id } });
-    if (!leave) return res.status(404).json({ success: false, message: "Leave not found" });
-
-    if (leave.type !== "COMP_OFF")
-      return res.status(400).json({ success: false, message: "Not a Comp-Off type leave" });
-
-    const days = calcDays(leave.startDate, leave.endDate);
-
-    if (action === "APPROVED") {
-      const user = await prisma.user.findUnique({ where: { id: leave.userId } });
-
-      if (user.compOffBalance < days)
-        return res.status(400).json({
-          success: false,
-          message: `Not enough balance. Need ${days}, Have ${user.compOffBalance}`
-        });
-
-      await prisma.user.update({
-        where: { id: leave.userId },
-        data: { compOffBalance: { decrement: days } }
+    if (!["APPROVED", "REJECTED"].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid action"
       });
     }
 
-    const updated = await prisma.leave.update({
-      where: { id },
-      data: {
-        status: action,
-        rejectReason: action === "REJECTED" ? reason || "" : null
+    const leave = await prisma.leave.findUnique({ where: { id } });
+    if (!leave)
+      return res.status(404).json({ success: false, message: "Leave not found" });
+
+    if (leave.type !== "COMP_OFF") {
+      return res.status(400).json({
+        success: false,
+        message: "Not a Comp-Off leave"
+      });
+    }
+
+    // ❗ Prevent double processing
+    if (leave.status !== "PENDING") {
+      return res.status(400).json({
+        success: false,
+        message: "Leave already processed"
+      });
+    }
+
+    const days = calcDays(leave.startDate, leave.endDate);
+
+    // ✅ Atomic transaction
+    await prisma.$transaction(async (tx) => {
+      if (action === "APPROVED") {
+        const user = await tx.user.findUnique({
+          where: { id: leave.userId }
+        });
+
+        if (user.compOffBalance < days) {
+          throw new Error("Insufficient balance at approval time");
+        }
+
+        await tx.user.update({
+          where: { id: leave.userId },
+          data: { compOffBalance: { decrement: days } }
+        });
       }
+
+      await tx.leave.update({
+        where: { id },
+        data: {
+          status: action,
+          rejectReason: action === "REJECTED" ? reason || "" : null
+        }
+      });
     });
 
     return res.json({
       success: true,
-      message: `Comp-Off ${action}`,
-      updated
+      message: `Comp-Off ${action}`
     });
 
   } catch (e) {
-    console.log("approveCompOffLeave:", e);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    console.error("approveCompOffLeave:", e);
+    return res.status(500).json({
+      success: false,
+      message: e.message || "Internal server error"
+    });
   }
 };
 
-
-
-
 /* ------------------------------------------------------------------
-   3️⃣ Admin → Grant Extra Comp-Off Balance (Manual Reward)
+   3️⃣ Admin → Grant Manual Comp-Off
 ------------------------------------------------------------------ */
 export const grantCompOff = async (req, res) => {
   try {
     const { userId, workDate, duration = 1, note } = req.body;
 
-    if (!userId || !workDate)
-      return res.status(400).json({ success: false, message: "User & workDate required" });
+    if (!userId || !workDate) {
+      return res.status(400).json({
+        success: false,
+        message: "User & workDate required"
+      });
+    }
 
     const record = await prisma.compOff.create({
       data: {
@@ -143,16 +176,16 @@ export const grantCompOff = async (req, res) => {
     });
 
   } catch (e) {
-    console.log("grantCompOff:", e);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    console.error("grantCompOff:", e);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
   }
 };
 
-
-
-
 /* ------------------------------------------------------------------
-   4️⃣ Admin → View All Comp-Off Entries
+   4️⃣ Admin → List All Comp-Off Records
 ------------------------------------------------------------------ */
 export const listCompOffRecords = async (req, res) => {
   try {
@@ -161,34 +194,47 @@ export const listCompOffRecords = async (req, res) => {
       orderBy: { createdAt: "desc" }
     });
 
-    return res.json({ success: true, records });
+    return res.json({
+      success: true,
+      records
+    });
 
   } catch (e) {
-    console.log("listCompOffRecords:", e);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    console.error("listCompOffRecords:", e);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
   }
 };
 
-
-
-
-
 /* ------------------------------------------------------------------
-   5️⃣ Admin → Delete + Balance Revert
+   5️⃣ Admin → Delete Comp-Off + Revert Balance
 ------------------------------------------------------------------ */
 export const deleteCompOff = async (req, res) => {
   try {
     const { id } = req.params;
 
     const rec = await prisma.compOff.findUnique({ where: { id } });
-    if (!rec) return res.status(404).json({ success: false, message: "Record not found" });
+    if (!rec)
+      return res.status(404).json({ success: false, message: "Record not found" });
 
-    await prisma.user.update({
-      where: { id: rec.userId },
-      data: { compOffBalance: { decrement: rec.duration } }
+    // ❗ Safety check
+    if (rec.status === "USED") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete used Comp-Off"
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: rec.userId },
+        data: { compOffBalance: { decrement: rec.duration } }
+      });
+
+      await tx.compOff.delete({ where: { id } });
     });
-
-    await prisma.compOff.delete({ where: { id } });
 
     return res.json({
       success: true,
@@ -196,7 +242,10 @@ export const deleteCompOff = async (req, res) => {
     });
 
   } catch (e) {
-    console.log("deleteCompOff:", e);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    console.error("deleteCompOff:", e);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
   }
 };

@@ -130,15 +130,27 @@ await creditMonthlyLeaveIfNeeded(currentUser, prisma);
       return res.status(400).json({ success: false, message: "Missing fields" });
     }
     // ⛔ COMP OFF but balance is zero
-    if (type === "COMP_OFF") {
-     const compUser  = await prisma.user.findUnique({ where: { id: req.user.id } });
-     if (!compUser || compUser.compOffBalance <= 0) {
-       return res.status(400).json({
-         success: false,
-         message: "Insufficient Comp-Off balance"
-       });
-     }
-    }
+if (type === "COMP_OFF") {
+  const days =
+    startDate === endDate
+      ? 1
+      : Math.floor(
+          (new Date(endDate) - new Date(startDate)) /
+          (1000 * 60 * 60 * 24)
+        ) + 1;
+
+  const compUser = await prisma.user.findUnique({
+    where: { id: req.user.id }
+  });
+
+  if (!compUser || compUser.compOffBalance < days) {
+    return res.status(400).json({
+      success: false,
+      message: `Insufficient Comp-Off balance. Available: ${compUser?.compOffBalance ?? 0}`
+    });
+  }
+}
+
     if (isHalfDay(type) && startDate !== endDate) {
       return res.status(400).json({ success: false, message: "Half Day must be for a single date" });
     }
@@ -232,7 +244,7 @@ if (responsiblePerson) {
       },
       include:{ user:true , responsiblePerson: true   }  // <-- IMPORTANT FIX (mail needs name)
     });
-    
+
 const updatedUser = await prisma.user.findUnique({
   where: { id: req.user.id },
   select: {
@@ -622,27 +634,39 @@ isEmployeeDeleted: false,
 // =====================================================
 // ✅ DEDUCT LEAVE BALANCE (ONLY ON FINAL APPROVAL)
 // =====================================================
-const isChargeableLeave = !["WFH", "UNPAID", "COMP_OFF"].includes(updated.type);
-if (finalStatus === "APPROVED") {
+if (finalStatus === "APPROVED" && updated.type !== "COMP_OFF") {
   await syncAttendanceWithLeave(updated);
 }
-if (finalStatus === "APPROVED" && isChargeableLeave) {
+
+if (finalStatus === "APPROVED") {
+
+await prisma.$transaction(async (tx) => {
+
   const leaveDays =
     updated.type === "HALF_DAY"
       ? 0.5
       : Math.floor(
           (updated.endDate - updated.startDate) /
-            (1000 * 60 * 60 * 24)
+          (1000 * 60 * 60 * 24)
         ) + 1;
 
-  await prisma.user.update({
-    where: { id: updated.userId },
-    data: {
-      leaveBalance: {
-        decrement: leaveDays
-      }
-    }
-  });
+  // NORMAL LEAVE
+  if (!["WFH", "UNPAID", "COMP_OFF"].includes(updated.type)) {
+    await tx.user.update({
+      where: { id: updated.userId },
+      data: { leaveBalance: { decrement: leaveDays } }
+    });
+  }
+
+  // COMP OFF
+  if (updated.type === "COMP_OFF") {
+    await tx.user.update({
+      where: { id: updated.userId },
+      data: { compOffBalance: { decrement: leaveDays } }
+    });
+  }
+});
+
 }
   
     // =====================================================

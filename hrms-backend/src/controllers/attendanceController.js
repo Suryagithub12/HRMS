@@ -92,7 +92,10 @@ export const checkIn = async (req, res) => {
     if (user.role === "ADMIN")
       return res.status(403).json({ success: false, message: "Admin cannot check in" });
 
-    const today = new Date();
+   // 🔥 Always use IST time (server independent)
+const today = new Date(
+  new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+);
     const todayISO = toLocalISO(today);
 
     /* =====================================================
@@ -178,7 +181,9 @@ if (leaveToday && !["WFH", "HALF_DAY"].includes(leaveToday.type)) {
 let status = "PRESENT";
 let lateHalfDayEligible = false;
 
-const halfDayCutoff = new Date(todayISO + "T12:00:00");
+const halfDayCutoff = new Date(
+  today.toDateString() + " 12:00:00"
+);
 
 if (isWeekOff) {
   status = "WEEKOFF_PRESENT";
@@ -254,10 +259,15 @@ const existing = await prisma.attendance.findFirst({
     if (existing.checkOut)
       return res.json({ success: true, message: "Already checked out", attendance: existing });
 
-    const updated = await prisma.attendance.update({
-      where: { id: existing.id },
-      data: { checkOut: new Date() }
-    });
+ const nowIST = new Date(
+  new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+);
+
+const updated = await prisma.attendance.update({
+  where: { id: existing.id },
+  data: { checkOut: nowIST }
+});
+
     // ⭐ Auto Comp-Off Grant if worked on weekly off
   if (existing.status === "WEEKOFF_PRESENT") {
   await autoGrantCompOff(user.id, existing.date);

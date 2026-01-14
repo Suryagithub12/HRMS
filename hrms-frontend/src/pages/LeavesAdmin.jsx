@@ -158,6 +158,7 @@ export default function LeavesAdmin() {
   const [approveLoadingId, setApproveLoadingId] = useState(null);
   const [rejectLoadingId, setRejectLoadingId] = useState(null);
   const [deleteLoadingId, setDeleteLoadingId] = useState(null);
+  const [lateHalfDays, setLateHalfDays] = useState([]);
 
   const openRejectPopup = (id) => {
     setRejectId(id);
@@ -193,10 +194,20 @@ const load = async () => {
   try {
     const c = await api.get("/comp-off");
     setCompOff(c.data.data || []);
-  } catch (err) {
+  } 
+  catch (err) {
     setMsg("Failed to load comp-off");
     setMsgType("error");
   }
+
+  // 3️⃣ Late Half Day Attendance (from Attendance)
+try {
+  const h = await api.get("/attendance/all?status=HALF_DAY_PENDING");
+  setLateHalfDays(h.data.attendances || []);
+} catch (err) {
+  console.error("Failed to load late half day");
+}
+
 
   setLoading(false);
 };
@@ -205,6 +216,22 @@ const load = async () => {
   useEffect(() => {
     load();
   }, []);
+
+const decideHalfDay = async (attendanceId, action) => {
+  try {
+    await api.post("/attendance/half-day/decision", {
+      attendanceId,
+      action, // APPROVE | REJECT
+    });
+
+    setMsg("Decision applied successfully");
+    setMsgType("success");
+    load(); // 🔥 reload leaves + attendance
+  } catch (e) {
+    setMsg(e?.response?.data?.message || "Action failed");
+    setMsgType("error");
+  }
+};
 
   // APPROVE - Now shows backend custom message
 // APPROVE
@@ -280,6 +307,7 @@ const submitReject = async (reason) => {
   };
 
   return (
+    
     <div className="space-y-10">
       {msg && (
         <div
@@ -292,6 +320,47 @@ const submitReject = async (reason) => {
           {msg}
         </div>
       )}
+{/* 🔥 LATE HALF DAY REQUESTS */}
+{lateHalfDays.length > 0 && (
+  <GlassCard>
+    <h3 className="text-xl font-semibold mb-4">
+      Late Half Day Requests
+    </h3>
+
+    <div className="space-y-4">
+      {lateHalfDays.map((a) => (
+        <div
+          key={a.id}
+          className="p-4 rounded-xl border bg-yellow-50 dark:bg-gray-900"
+        >
+          <div className="font-semibold">
+            {a.user?.firstName} {a.user?.lastName}
+          </div>
+
+          <div className="text-sm text-gray-500">
+            Date: {a.date?.slice(0, 10)}
+          </div>
+
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => decideHalfDay(a.id, "REJECT")}
+              className="px-3 py-1 bg-green-600 text-white rounded"
+            >
+              Remain Present
+            </button>
+
+            <button
+              onClick={() => decideHalfDay(a.id, "APPROVE")}
+              className="px-3 py-1 bg-red-600 text-white rounded"
+            >
+              Yes, Half Day
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  </GlassCard>
+)}
 
       <PageTitle title="Leaves" sub="Admin Panel – Approve & Manage Leaves" />
 

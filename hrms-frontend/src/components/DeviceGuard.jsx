@@ -3,19 +3,32 @@ import React, { useEffect, useState } from "react";
 const isMobileOrTablet = () => {
   const ua = navigator.userAgent || "";
 
-  // 1️⃣ Mobile / Tablet UA detect
-  const isUADevice =
-    /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
 
-  // 2️⃣ Touch-capable devices (desktop mode bhi catch)
-  const isTouchDevice =
+  const hasTouch =
     navigator.maxTouchPoints > 0 ||
     "ontouchstart" in window;
 
-  // 3️⃣ Screen size fallback
   const isSmallScreen = window.innerWidth < 1024;
 
-  return isUADevice || isTouchDevice || isSmallScreen;
+  /**
+   * FINAL LOGIC
+   *
+   * ❌ iOS → always BLOCK (iPhone/iPad)
+   * ❌ Android + small screen → BLOCK (mobile / tablet)
+   * ❌ Touch + small screen → BLOCK
+   *
+   * ✅ Android + big screen → ALLOW (Primebook)
+   * ✅ Windows / Mac / Linux → ALLOW
+   */
+  if (isIOS) return true;
+
+  if (isAndroid && isSmallScreen) return true;
+
+  if (!isAndroid && hasTouch && isSmallScreen) return true;
+
+  return false;
 };
 
 export default function DeviceGuard({ children }) {
@@ -27,7 +40,6 @@ export default function DeviceGuard({ children }) {
     };
 
     checkDevice();
-
     window.addEventListener("resize", checkDevice);
     window.addEventListener("orientationchange", checkDevice);
 
