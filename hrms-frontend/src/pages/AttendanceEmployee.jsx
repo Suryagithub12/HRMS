@@ -16,13 +16,11 @@ const uiStatus = (s) => {
   if (!s) return "ABSENT";
   return s; // backend is the single source of truth
 };
-
 const formatTime = (v) =>
   v
     ? new Date(v).toLocaleTimeString("en-IN", {
         hour: "2-digit",
         minute: "2-digit",
-        timeZone: "Asia/Kolkata",
       })
     : "--";
 

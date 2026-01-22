@@ -19,7 +19,6 @@ const formatTime = (v) =>
     ? new Date(v).toLocaleTimeString("en-IN", {
         hour: "2-digit",
         minute: "2-digit",
-        timeZone: "Asia/Kolkata",
       })
     : "--";
 
@@ -241,7 +240,7 @@ function LeavesSection({ emp, limit, setLimit }) {
 />
         <InfoCard
           label="Remaining Leaves"
-          value={`${stats.remainingLeaves ?? 0} / ${stats.yearlyQuota ?? 21}`}
+          value={`${stats.remainingLeaves ?? 0} / ${stats.yearlyQuota}`}
           icon={<FiCalendar />}
         />
 

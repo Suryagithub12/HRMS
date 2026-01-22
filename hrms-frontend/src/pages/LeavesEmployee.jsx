@@ -165,8 +165,6 @@ export default function Leaves() {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user.role === "ADMIN";
 
-  const TOTAL_YEARLY_LEAVES = 21;
-
   const currentYear = new Date().getFullYear();
   const yearStart = `${currentYear}-01-01`;
   const yearEnd = `${currentYear}-12-31`;
@@ -261,7 +259,13 @@ const approvedLeaveDays = React.useMemo(() => {
   ).length;
 
   // ⭐ Remaining leaves
-  const remainingLeaves = Math.max(TOTAL_YEARLY_LEAVES - approvedLeaveDays, 0);
+const yearlyQuota = user?.stats?.yearlyQuota ?? 21;
+
+const remainingLeaves = Math.max(
+  yearlyQuota - approvedLeaveDays,
+  0
+);
+
     useEffect(() => {
   const loadHolidays = async () => {
     try {
@@ -533,7 +537,7 @@ if (todayCheck.blocked) {
           <StatCard icon={<FiClock className="text-green-500" />} title="Half Day Approved" value={approvedHalfDay} />
           <StatCard icon={<FiClock className="text-teal-500" />} title="Comp-Off Balance" value={user?.compOffBalance ?? 0}/>
           <StatCard icon={<FiCalendar className="text-green-600" />} title="Available Leave Balance"  value={user?.leaveBalance ?? 0}/>
-          <StatCard icon={<FiCalendar className="text-red-500" />} title="Remaining Leaves" value={`${remainingLeaves} / ${TOTAL_YEARLY_LEAVES}`}/>
+          <StatCard icon={<FiCalendar className="text-red-500" />} title="Remaining Leaves" value={`${remainingLeaves} / ${yearlyQuota}`}/>
         </div>
       )}
 

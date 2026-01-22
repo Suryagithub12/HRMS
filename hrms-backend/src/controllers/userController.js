@@ -2,7 +2,6 @@ import prisma from "../prismaClient.js";
 import bcrypt from "bcryptjs";
 import { sendUserCredentialsMail } from "../utils/sendMail.js";
 import { creditMonthlyLeaveIfNeeded } from "../utils/leaveCredit.js";
-const TOTAL_YEARLY_LEAVES = 21;
 
 /* ============================================================
    GET LOGGED-IN USER INFO
@@ -588,21 +587,22 @@ leaves: {
       return res.status(404).json({ message: "User not found" });
     }
 
+    
     // 🔥 ⭐ MAIN FIX — MONTHLY CREDIT HERE ALSO
     const credited = await creditMonthlyLeaveIfNeeded(user, prisma);
-
+    
     // 🔄 re-fetch if credit happened
     if (credited > 0) {
       user = await prisma.user.findFirst({
         where: { id,
-             isActive: true,
-         },
+          isActive: true,
+        },
         include: {
           department: true,
           departments: {
             include: { department: true },
           },
-         weeklyOffs: {
+          weeklyOffs: {
             select: {
               offDay: true,
               offDate: true,
@@ -610,10 +610,10 @@ leaves: {
             },
           },
           attendances: true,
-         leaves: {
-  where: { isAdminDeleted: false },
-  orderBy: { createdAt: "desc" },
-},
+          leaves: {
+            where: { isAdminDeleted: false },
+            orderBy: { createdAt: "desc" },
+          },
           payrolls: true,
           notifications: true,
           resignations: {
@@ -623,11 +623,23 @@ leaves: {
         },
       });
     }
+    
+const MONTHLY_CREDIT = 1.75;
 
+const joinDate = new Date(user.createdAt);
+const joinYear = joinDate.getFullYear();
+const joinMonth = joinDate.getMonth(); // Jan = 0
+
+const currentYear = new Date().getFullYear();
+
+const TOTAL_YEARLY_LEAVES =
+  joinYear === currentYear
+    ? 21 - joinMonth * MONTHLY_CREDIT
+    : 21;
     // ==== KPI LOGIC (AS IT IS) ====
-    const currentYear = new Date().getFullYear();
-    const yearStart = new Date(`${currentYear}-01-01`);
-    const yearEnd = new Date(`${currentYear}-12-31`);
+const statsYear = new Date().getFullYear();
+const yearStart = new Date(`${statsYear}-01-01`);
+const yearEnd = new Date(`${statsYear}-12-31`);
 
     const yearlyLeaves = user.leaves.filter(
       (l) =>
