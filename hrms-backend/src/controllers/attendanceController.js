@@ -464,10 +464,23 @@ today.setHours(0, 0, 0, 0);
       cur.setDate(cur.getDate() + 1);
     }
 
+const corrections = await prisma.attendanceCorrection.findMany({
+  where: { userId },
+});
+
+const correctionMap = {};
+corrections.forEach(c => {
+  correctionMap[toLocalISO(c.date)] = {
+    status: c.status,
+    adminReason: c.adminReason,
+  };
+});
+
     return res.json({
       success: true,
       attendances: dailyLogs,
-      calendar
+      calendar,
+      corrections: correctionMap,
     });
 
   } catch (err) {
@@ -968,7 +981,7 @@ if (format === "csv") {
     date: toLocalISO(r.date),
     checkIn: formatIST(r.checkIn),
     checkOut: formatIST(r.checkOut),
-    status: r.status,
+    status: r.lateHalfDayEligible ? "HALF_DAY_PENDING" : r.status,
   }));
   
    const parser = new Parser({
@@ -999,7 +1012,7 @@ if (format === "csv") {
         date: toLocalISO(r.date),
         checkIn: formatIST(r.checkIn),
         checkOut: formatIST(r.checkOut),
-        status: r.status
+        status: r.lateHalfDayEligible ? "HALF_DAY_PENDING" : r.status,
       });
     });
 
