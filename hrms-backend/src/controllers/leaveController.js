@@ -208,12 +208,26 @@ if (type === "WFH" && !reason?.trim()) {
 const isChargeableLeave = !["WFH", "UNPAID", "COMP_OFF"].includes(type);
 // 🔐 BALANCE CHECK
 const daysRequested =
-  !isChargeableLeave ? 0  : type === "HALF_DAY"  ? 0.5 : Math.floor((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1;
+  !isChargeableLeave
+    ? 0
+    : type === "HALF_DAY"
+    ? 0.5
+    : Math.floor(
+        (new Date(endDate) - new Date(startDate)) /
+          (1000 * 60 * 60 * 24)
+      ) + 1;
 
-if (currentUser.leaveBalance < daysRequested) {
+// ✅ Allow SICK leave even if monthly balance is not enough.
+//    - Monthly `leaveBalance` is allowed to go negative
+//    - Yearly cap (21) is enforced via yearly stats (remainingLeaves)
+if (
+  isChargeableLeave &&
+  type !== "SICK" && // normal chargeable leaves still require balance
+  currentUser.leaveBalance < daysRequested
+) {
   return res.status(400).json({
     success: false,
-    message: `Insufficient Leave Balance. Available: ${currentUser.leaveBalance}`
+    message: `Insufficient Leave Balance. Available: ${currentUser.leaveBalance}`,
   });
 }
     /* Get all managers */
