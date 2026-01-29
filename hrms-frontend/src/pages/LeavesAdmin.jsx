@@ -250,9 +250,20 @@ try {
     load();
   }, []);
 
-  // 🔎 Optional: highlight specific leave when opened from notification
+  // 🔎 Optional: highlight specific leave or correction when opened from notification
   const searchParams = new URLSearchParams(location.search);
   const focusLeaveId = searchParams.get("leaveId");
+  const focusCorrectionId = searchParams.get("correctionId");
+
+  // Scroll to Cancel Leave (correction) when opened from notification
+  useEffect(() => {
+    if (!focusCorrectionId || attendanceCorrections.length === 0) return;
+    const el = document.getElementById(`correction-${focusCorrectionId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [focusCorrectionId, attendanceCorrections]);
+
   useEffect(() => {
   // Auto refresh when admin switches back to tab
   const handleVisibilityChange = () => {
@@ -435,7 +446,7 @@ const submitReject = async (reason) => {
   </GlassCard>
 )}
 {attendanceCorrections.length > 0 && (
-  <GlassCard>
+  <GlassCard id="cancel-leave-corrections-section">
     <h3 className="text-xl font-semibold mb-4">
     Request For Back Date Present If Absent By Some Reason
     </h3>
@@ -444,7 +455,12 @@ const submitReject = async (reason) => {
       {attendanceCorrections.map((c) => (
         <div
           key={c.id}
-          className="p-4 rounded-xl border bg-indigo-50 dark:bg-gray-900"
+          id={`correction-${c.id}`}
+          className={`p-4 rounded-xl border ${
+            focusCorrectionId === c.id
+              ? "ring-2 ring-indigo-500 border-indigo-500 bg-indigo-100 dark:bg-indigo-900/30"
+              : "bg-indigo-50 dark:bg-gray-900"
+          }`}
         >
           <div className="font-semibold">
             {c.user.firstName} {c.user.lastName}

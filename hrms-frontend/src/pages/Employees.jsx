@@ -62,7 +62,7 @@ export default function Employees() {
       setUsers(usersRes.data.users || []);
       setDepartments(deptRes.data.departments || []);
     } catch (err) {
-      console.log(err);
+      setErrorMsg(err?.response?.data?.message || "Failed to load");
     }
     setLoading(false);
   };

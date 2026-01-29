@@ -19,7 +19,7 @@ export default function WeeklyOff() {
       const w = await api.get("/weekly-off/all");
       setList(w.data.data || []);
     } catch (e) {
-      console.log("Fetch error", e);
+      // Fetch failed; list remains empty
     }
   };
 

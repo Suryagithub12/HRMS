@@ -30,9 +30,15 @@ export default function NotificationDropdown() {
         for (const n of all) {
           const metaType = n.meta?.type;
           const leaveId = n.meta?.leaveId;
+          const correctionId = n.meta?.correctionId;
 
           if (metaType === "leave_request" && leaveId) {
             const key = `leave_request:${leaveId}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            deduped.push(n);
+          } else if (metaType === "attendance_correction" && correctionId) {
+            const key = `attendance_correction:${correctionId}`;
             if (seen.has(key)) continue;
             seen.add(key);
             deduped.push(n);
@@ -187,10 +193,18 @@ export default function NotificationDropdown() {
                     // 2️⃣ Navigation logic
                     const metaType = n.meta?.type;
                     const leaveId = n.meta?.leaveId;
+                    const correctionId = n.meta?.correctionId;
 
-                    // If this is a leave request notification with leaveId → jump to specific leave
+                    // Leave request → jump to specific leave on /leaves
                     if (metaType === "leave_request" && leaveId) {
                       navigate(`/leaves?leaveId=${leaveId}`);
+                      setOpen(false);
+                      return;
+                    }
+
+                    // Cancel Leave (attendance correction) → jump to correction on /leaves
+                    if (metaType === "attendance_correction" && correctionId) {
+                      navigate(`/leaves?correctionId=${correctionId}`);
                       setOpen(false);
                       return;
                     }

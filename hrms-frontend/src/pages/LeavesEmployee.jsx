@@ -157,6 +157,9 @@ export default function Leaves() {
     witnessId: "",
     reason: "",
   });
+  const [cancelSubmitLoading, setCancelSubmitLoading] = useState(false);
+  const [cancelSubmitted, setCancelSubmitted] = useState(false);
+  const [cancelMessage, setCancelMessage] = useState("");
 
   const user = useAuthStore((s) => s.user);
   const isAdmin = user.role === "ADMIN";
@@ -668,19 +671,22 @@ export default function Leaves() {
                 formMode === "LEAVE"
                   ? apply
                   : async () => {
+                      if (
+                        !cancelForm.date ||
+                        !cancelForm.checkInTime ||
+                        !cancelForm.checkOutTime ||
+                        !cancelForm.witnessId
+                      ) {
+                        setMsg(
+                          "Date, times and witness are required for Cancel Leave",
+                        );
+                        setMsgType("error");
+                        return;
+                      }
+                      setCancelSubmitLoading(true);
+                      setMsg("");
+                      setCancelMessage("");
                       try {
-                        if (
-                          !cancelForm.date ||
-                          !cancelForm.checkInTime ||
-                          !cancelForm.checkOutTime ||
-                          !cancelForm.witnessId
-                        ) {
-                          setMsg(
-                            "Date, times and witness are required for Cancel Leave",
-                          );
-                          setMsgType("error");
-                          return;
-                        }
                         await api.post("/attendance-corrections/request", {
                           date: cancelForm.date,
                           checkInTime: cancelForm.checkInTime,
@@ -690,8 +696,12 @@ export default function Leaves() {
                             cancelForm.reason ||
                             "Missed to check-in, present in office",
                         });
-                        setMsg("Cancel leave request submitted for approval");
+                        const successMsg =
+                          "Cancel leave request submitted. Admins will be notified for approval.";
+                        setMsg(successMsg);
                         setMsgType("success");
+                        setCancelMessage(successMsg);
+                        setCancelSubmitted(true);
                         setCancelForm({
                           date: "",
                           checkInTime: "",
@@ -699,24 +709,39 @@ export default function Leaves() {
                           witnessId: "",
                           reason: "",
                         });
-                        setFormMode("LEAVE");
+                        setTimeout(() => {
+                          setCancelSubmitted(false);
+                          setCancelMessage("");
+                          setFormMode("LEAVE");
+                        }, 2000);
                       } catch (err) {
                         const errorMsg =
                           err?.response?.data?.message ||
                           "Failed to submit cancel leave request";
                         setMsg(errorMsg);
                         setMsgType("error");
+                        setCancelMessage(errorMsg);
+                      } finally {
+                        setCancelSubmitLoading(false);
                       }
                     }
               }
-              disabled={applyLoading || applied}
+              disabled={
+                formMode === "LEAVE"
+                  ? applyLoading || applied
+                  : cancelSubmitLoading || cancelSubmitted
+              }
               className={`px-6 py-3 rounded-xl font-semibold shadow-lg text-white
     ${
       applied && formMode === "LEAVE"
         ? "bg-green-600 cursor-default"
-        : applyLoading
-          ? "bg-indigo-400 cursor-wait"
-          : "bg-indigo-600 hover:bg-indigo-700"
+        : cancelSubmitted && formMode === "CANCEL"
+          ? "bg-green-600 cursor-default"
+          : formMode === "CANCEL" && cancelSubmitLoading
+            ? "bg-indigo-400 cursor-wait"
+            : applyLoading
+              ? "bg-indigo-400 cursor-wait"
+              : "bg-indigo-600 hover:bg-indigo-700"
     }
   `}
             >
@@ -726,8 +751,27 @@ export default function Leaves() {
                   : applyLoading
                     ? "Applying..."
                     : "Apply"
-                : "Submit Cancel Request"}
+                : cancelSubmitted
+                  ? "Submitted ✔"
+                  : cancelSubmitLoading
+                    ? "Submitting..."
+                    : "Submit Cancel Request"}
             </button>
+
+            {cancelMessage && formMode === "CANCEL" && (
+              <span
+                className={`text-sm font-medium ${
+                  cancelMessage.includes("Failed") ||
+                  cancelMessage.includes("Error") ||
+                  cancelMessage.includes("required") ||
+                  cancelMessage.includes("already")
+                    ? "text-red-600"
+                    : "text-green-600"
+                }`}
+              >
+                {cancelMessage}
+              </span>
+            )}
 
             {applyMessage && formMode === "LEAVE" && (
               <span

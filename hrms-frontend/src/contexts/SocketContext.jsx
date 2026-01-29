@@ -51,17 +51,14 @@ export const SocketProvider = ({ children }) => {
     });
 
     newSocket.on("connect", () => {
-      console.log("✅ Socket.io connected");
       setIsConnected(true);
     });
 
     newSocket.on("disconnect", () => {
-      console.log("❌ Socket.io disconnected");
       setIsConnected(false);
     });
 
-    newSocket.on("connect_error", (error) => {
-      console.error("Socket.io connection error:", error);
+    newSocket.on("connect_error", () => {
       setIsConnected(false);
     });
 

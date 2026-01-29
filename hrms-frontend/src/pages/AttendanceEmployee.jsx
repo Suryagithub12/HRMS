@@ -205,7 +205,7 @@ const wfh = Object.values(calendarMap).filter(s => s === "WFH").length;
 const weekoffPresent = Object.values(calendarMap).filter( s => s === "WEEKOFF_PRESENT").length;
   setKpi({ present, leave, wfh, weekoffPresent});
     } catch (err) {
-      console.log("YEAR LOAD FAILED", err);
+      setError(err?.response?.data?.message || "Failed to load year data");
     }
   }, []);
 
