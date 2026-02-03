@@ -299,7 +299,6 @@ export const managerNotifications = async (req, res) => {
     // 1️⃣ Manager ke departments
     const depts = await prisma.department.findMany({
       where: {
-        isActive: true,
         managers: {
           some: { id: managerId },
         },

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import api from "../api/axios";
 import useAuthStore from "../stores/authstore";
 import { useNavigate } from "react-router-dom";
-import { FiMoon, FiSun } from "react-icons/fi";
+import { FiMoon, FiSun, FiDownload } from "react-icons/fi";
 import { FiEye, FiEyeOff } from "react-icons/fi";
 
 export default function Login() {
@@ -136,14 +136,30 @@ const submit = async (e) => {
         </div>
       </header>
 
-      {/* THEME TOGGLE */}
-      <button
-        onClick={toggleTheme}
-        className="absolute top-6 right-6 z-20 p-2 rounded-full bg-white/70 dark:bg-gray-800/70 
-          border border-gray-200 dark:border-gray-700 shadow-lg hover:scale-110 transition"
-      >
-        {darkMode ? <FiSun className="text-yellow-400" /> : <FiMoon />}
-      </button>
+{/* TOP RIGHT BUTTONS */}
+<div className="absolute top-6 right-6 z-20 flex items-center gap-3">
+  {/* DOWNLOAD PDF */}
+  <a
+    href="/HRMSUserGuide.pdf"
+    download
+    className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/70 dark:bg-gray-800/70 
+      border border-gray-200 dark:border-gray-700 shadow-lg hover:scale-105 transition"
+  >
+    <FiDownload className="text-indigo-600 dark:text-indigo-400" />
+    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+      How to Use HRMS?
+    </span>
+  </a>
+
+  {/* THEME TOGGLE */}
+  <button
+    onClick={toggleTheme}
+    className="p-2 rounded-full bg-white/70 dark:bg-gray-800/70 
+      border border-gray-200 dark:border-gray-700 shadow-lg hover:scale-110 transition"
+  >
+    {darkMode ? <FiSun className="text-yellow-400" /> : <FiMoon />}
+  </button>
+</div>
 
       {/* LOGIN CARD */}
       <div className="relative mx-auto w-full max-w-md p-[2px] rounded-3xl 

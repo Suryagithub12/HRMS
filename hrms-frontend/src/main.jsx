@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { SocketProvider } from './contexts/SocketContext';
 import './index.css';
+import ErrorBoundary from './components/ErrorBoundary';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -13,9 +14,11 @@ createRoot(document.getElementById('root')).render(
         v7_relativeSplatPath: true,
       }}
     >
+    <ErrorBoundary>
       <SocketProvider>
         <App />
       </SocketProvider>
+    </ErrorBoundary>
     </BrowserRouter>
   </React.StrictMode>
 );

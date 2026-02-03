@@ -439,7 +439,7 @@ export default function Leaves() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <StatCard
             icon={<FiClock className="text-green-500" />}
-            title="Approved Leave Days"
+            title="Total Approved Leave Days (Count Leaves and HalfDays not CompOff and WFH)"
             value={approvedLeaveDays}
           />
           <StatCard
@@ -449,7 +449,7 @@ export default function Leaves() {
           />
           <StatCard
             icon={<FiClock className="text-green-500" />}
-            title="Half Day Approved"
+            title="Approved HalfDay Count (0.5 Leave deduct as per count) "
             value={approvedHalfDay}
           />
           <StatCard
