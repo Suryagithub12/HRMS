@@ -21,7 +21,7 @@ const startOfDay = (dateISO) => {
 };
 const endOfDay = (dateISO) => {
   const d = new Date(dateISO);
-  d.setHours(22, 59, 59, 999);
+  d.setHours(23, 59, 59, 999);
   return d;
 };
 
@@ -115,7 +115,7 @@ export async function markAutoLeavesForDate(dateISO) {
         userId: user.id,
         type: "UNPAID",
         startDate: dateStart,
-        endDate: dateStart,
+        endDate: dateEnd,
         status: "APPROVED",
         reason: "Auto-marked: no attendance recorded for this day",
       },
