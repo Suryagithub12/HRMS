@@ -807,8 +807,14 @@ export const decideHalfDay = async (req, res) => {
           lateHalfDayEligible: false,
         },
       });
-
-      // 2️⃣ Create HALF DAY leave
+    
+      // 🔥 2️⃣ Deduct 0.5 from leaveBalance (can go negative)
+      await prisma.user.update({
+        where: { id: attendance.userId },
+        data: { leaveBalance: { decrement: 0.5 } }
+      });
+    
+      // 3️⃣ Create HALF DAY leave
       await prisma.leave.create({
         data: {
           userId: attendance.userId,
@@ -819,7 +825,7 @@ export const decideHalfDay = async (req, res) => {
           reason: "Late Check-in",
         },
       });
-
+    
       return res.json({
         success: true,
         message: "Half-day approved",

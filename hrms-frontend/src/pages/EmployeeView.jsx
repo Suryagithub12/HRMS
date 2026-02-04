@@ -214,20 +214,28 @@ function AttendanceSection({ emp, limit, setLimit }) {
 function LeavesSection({ emp, limit, setLimit }) {
   const leaves = emp.leaves || [];
   const stats = emp.stats || {};
+  const approvedUnpaidCount = leaves.filter(
+    (l) => l.type === "UNPAID" && l.status === "APPROVED"
+  ).length;
 
   return (
     <Section title="Leave Summary (Yearly)">
       
       {/* 🔥 KPI CARDS — SAME AS DASHBOARD */}
       <div className="grid sm:grid-cols-4 gap-4">
-        <InfoCard
+        {/* <InfoCard
           label="Applied Leaves"
           value={stats.totalLeaves ?? 0}
           icon={<FiCalendar />}
-        />
+        /> */}
         <InfoCard
           label="Approved Leaves"
           value={stats.approvedLeaves ?? 0}
+          icon={<FiCalendar />}
+        />
+          <InfoCard
+          label="Approved Unpaid Leaves"
+          value={approvedUnpaidCount}
           icon={<FiCalendar />}
         />
         <InfoCard

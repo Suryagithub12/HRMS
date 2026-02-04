@@ -634,19 +634,24 @@ function EmployeesTable({ employees }) {
 
 /* ================= ATTENDANCE ================= */
 function statusBadge(status) {
-const map = {
-  PRESENT: "bg-green-100 text-green-700",
-  // LATE: "bg-yellow-100 text-yellow-700",
-  LEAVE: "bg-red-100 text-red-700",
-  WFH: "bg-blue-100 text-blue-700",
-  HALF_DAY: "bg-purple-100 text-purple-700", // ✅ ADD
-  ABSENT: "bg-gray-200 text-gray-600",
-};
+  const map = {
+    PRESENT: "bg-green-500/20 text-green-600 dark:text-green-400",
+    LEAVE: "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400",      // 🔥 Yellow
+    WFH: "bg-blue-500/20 text-blue-600 dark:text-blue-400",
+    HALF_DAY: "bg-purple-500/20 text-purple-600 dark:text-purple-400",
+    HALF_DAY_PENDING: "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400",
+    COMP_OFF: "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400",
+    WEEK_OFF: "bg-purple-500/20 text-purple-600 dark:text-purple-400",
+    ABSENT: "bg-red-500/20 text-red-600 dark:text-red-400",              // 🔥 Red
+    // LATE: "bg-orange-500/20 text-orange-600 dark:text-orange-400",
+    PENDING: "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400",
+    LATE_CHECKIN: "bg-amber-500/20 text-amber-600 dark:text-amber-400",
+  };
 
   return (
-    <span
-      className={`text-xs px-2 py-1 rounded ${
-        map[status] || "bg-gray-200"
+    <span 
+      className={`text-xs px-3 py-1 rounded-full font-medium ${
+        map[status] || "bg-gray-500/20 text-gray-600 dark:text-gray-400"
       }`}
     >
       {status}
@@ -657,43 +662,46 @@ const map = {
 /* ================= TODAY ATTENDANCE (MANAGER) ================= */
 
 function TodayAttendance({ rows, summary }) {
-  if (!rows.length) return <Empty text="No attendance for today" />;
+  if (!rows.length && !summary) return <Empty text="No attendance for today" />;
 
   return (
     <div className="space-y-4">
 
-      {/* 🔢 SUMMARY CARDS */}
+      {/* 🔢 KPI CARDS */}
       {summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs">
-          <SummaryCard label="Present" value={summary.present} color="green" />
-          {/* <SummaryCard label="Late" value={summary.late} color="yellow" /> */}
-          <SummaryCard label="Leave" value={summary.leave} color="red" />
-          <SummaryCard label="WFH" value={summary.wfh} color="blue" />
-          <SummaryCard label="Half Day" value={summary.halfDay} color="purple" />
-          <SummaryCard label="Absent" value={summary.absent} color="gray" />
-        </div>
-      )}
+  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <MiniKPI label="Total Employees" value={summary.totalEmployees ?? rows.length} color="indigo" />
+    <MiniKPI label="Present" value={summary.present ?? 0} color="green" />
+    <MiniKPI label="On HalfDay" value={summary.halfDay ?? 0} color="yellow" />
+    <MiniKPI label="WFH" value={summary.wfh ?? 0} color="blue" />
+    <MiniKPI label="WeekOff Present" value={summary.weekOffPresent ?? 0} color="gray" />
+    <MiniKPI label="On Leave" value={summary.leave ?? 0} color="yellow" />
+    <MiniKPI label="On CompOff Leave" value={summary.compOff ?? 0} color="yellowLight" />
+    <MiniKPI label="Week Off" value={summary.weekOff ?? 0} color="orange" />
+    <MiniKPI label="Absent" value={summary.absent ?? 0} color="red" />
+  </div>
+)}
 
       {/* 📋 TABLE */}
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b">
-            <th className="text-left">Employee</th>
-            <th className="text-left">Status</th>
-            <th className="text-left">Check In</th>
-            <th className="text-left">Check Out</th>
+            <th className="text-left p-2">Employee</th>
+            <th className="text-left p-2">Status</th>
+            <th className="text-left p-2">Check In</th>
+            <th className="text-left p-2">Check Out</th>
           </tr>
         </thead>
 
         <tbody>
           {rows.map((r) => (
             <tr key={r.userId} className="border-b">
-              <td>{r.name}</td>
-              <td>{statusBadge(r.status)}</td>
-              <td className="text-xs">
+              <td className="p-2">{r.name}</td>
+              <td className="p-2">{statusBadge(r.status)}</td>
+              <td className="p-2 text-xs">
                 {r.checkIn ? new Date(r.checkIn).toLocaleTimeString() : "-"}
               </td>
-              <td className="text-xs">
+              <td className="p-2 text-xs">
                 {r.checkOut ? new Date(r.checkOut).toLocaleTimeString() : "-"}
               </td>
             </tr>
@@ -703,27 +711,45 @@ function TodayAttendance({ rows, summary }) {
     </div>
   );
 }
-
 /* ================= SUMMARY CARD ================= */
 function SummaryCard({ label, value, color }) {
   const map = {
-    green: "bg-green-100 text-green-700",
-    yellow: "bg-yellow-100 text-yellow-700",
-    red: "bg-red-100 text-red-700",
-    blue: "bg-blue-100 text-blue-700",
-    purple: "bg-purple-100 text-purple-700",
-    gray: "bg-gray-200 text-gray-600",
+    green: "bg-green-500/20 text-green-600 dark:bg-green-500/30 dark:text-green-400 border border-green-500/30",
+    yellow: "bg-yellow-500/20 text-yellow-600 dark:bg-yellow-500/30 dark:text-yellow-400 border border-yellow-500/30",
+    red: "bg-red-500/20 text-red-600 dark:bg-red-500/30 dark:text-red-400 border border-red-500/30",
+    blue: "bg-blue-500/20 text-blue-600 dark:bg-blue-500/30 dark:text-blue-400 border border-blue-500/30",
+    purple: "bg-purple-500/20 text-purple-600 dark:bg-purple-500/30 dark:text-purple-400 border border-purple-500/30",
+    gray: "bg-gray-500/20 text-gray-600 dark:bg-gray-500/30 dark:text-gray-400 border border-gray-500/30",
   };
 
   return (
-    <div className={`rounded p-3 text-center ${map[color]}`}>
-      <div className="font-semibold">{value}</div>
-      <div>{label}</div>
+    <div className={`rounded-xl p-4 text-center ${map[color]}`}>
+      <div className="text-2xl font-bold">{value}</div>
+      <div className="text-xs mt-1">{label}</div>
     </div>
   );
 }
-
 /* ================= EMPTY ================= */
 function Empty({ text }) {
   return <div className="text-center py-8 text-gray-500">{text}</div>;
+}
+/* ================= MINI KPI ================= */
+function MiniKPI({ label, value, color }) {
+  const colorMap = {
+    indigo: "text-indigo-600",
+    green: "text-green-600",
+    yellow: "text-yellow-600",
+    blue: "text-blue-600",
+    gray: "text-gray-500",
+    yellowLight: "text-yellow-400",
+    orange: "text-orange-400",
+    red: "text-red-600",
+  };
+
+  return (
+    <div className="p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl text-center border shadow">
+      <p className="text-sm text-gray-500">{label}</p>
+      <p className={`text-2xl font-extrabold ${colorMap[color]}`}>{value}</p>
+    </div>
+  );
 }

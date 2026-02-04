@@ -386,7 +386,7 @@ const attendanceLine = useMemo(() => {
 
           </div>
 
-          {/* PAYROLL SNAPSHOT */}
+          {/* PAYROLL SNAPSHOT
           <div className="p-3 sm:p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow">
             <h3 className="font-semibold mb-3 text-sm sm:text-base">Payroll Snapshot</h3>
             {!data ? (
@@ -403,7 +403,7 @@ const attendanceLine = useMemo(() => {
                 />
               </div>
             )}
-          </div>
+          </div> */}
           {/* LEAVE + WFH PANEL */}
           <div className="p-3 sm:p-4 bg-white/70 dark:bg-gray-800/50 rounded-xl shadow space-y-4 sm:space-y-5">
 

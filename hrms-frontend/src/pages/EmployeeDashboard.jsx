@@ -440,7 +440,7 @@ const InfoBox = ({ title, subtitle, icon }) => (
 /> */}
 
 <InfoBox
-  title="Approved Leaves + Half_Days + CompOff"
+  title="Approved (Leaves + HalfDays + CompOff)"
   subtitle={data.stats.approvedLeaveDays}
   icon="A"
 />

@@ -5,7 +5,8 @@ import {
   approveLeave,
   updateLeave,
   deleteLeave,
-  getLeaveById
+  getLeaveById,
+  exportLeaves 
 } from "../controllers/leaveController.js";
 
 import { requireAuth } from "../middlewares/auth.js";
@@ -33,6 +34,11 @@ router.get(
   listLeaves
 );
 
+router.get(
+  "/export",
+  requireAuth(["ADMIN"]),
+  exportLeaves
+);
 /* =====================================================
    GET SINGLE LEAVE
 ===================================================== */

@@ -3,7 +3,8 @@ import { sendRequestNotificationMail } from "../utils/sendMail.js";
 import { getAdminAndManagers } from "../utils/getApprovers.js";
 import { creditMonthlyLeaveIfNeeded } from "../utils/leaveCredit.js";
 import { emitToAdmins, emitToUsers, emitToUser } from "../socket/socketServer.js";
-
+import { Parser } from "json2csv";
+import ExcelJS from "exceljs";
 
 const isHalfDay = (type) => type === "HALF_DAY";
 const getDayName = (d) => new Date(d).toLocaleDateString("en-US",{weekday:"long"});
@@ -918,5 +919,130 @@ export const deleteLeave = async (req, res) => {
       success:false,
       message:"Internal server error"
     });
+  }
+};
+/* --------------------------------------------------------
+   EXPORT LEAVES (CSV / EXCEL)
+-------------------------------------------------------- */
+export const exportLeaves = async (req, res) => {
+  try {
+    const user = req.user;
+    let { start, end, userId, format } = req.query;
+    if (!format) format = "csv";
+
+    const where = { 
+      isAdminDeleted: false, 
+      user: { isActive: true } 
+    };
+
+    // Role based filter
+    if (user.role !== "ADMIN") where.userId = user.id;
+    else if (userId) where.userId = userId;
+
+    // Date filter
+    if (start && end) {
+      where.createdAt = { gte: new Date(start), lte: new Date(end) };
+    }
+
+    const rows = await prisma.leave.findMany({
+      where,
+      include: { 
+        user: true, 
+        responsiblePerson: true 
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const getLeaveTypeName = (type) => {
+      const typeNames = {
+        WFH: "WFH",
+        HALF_DAY: "Half Day",
+        PAID: "Paid Leave",
+        UNPAID: "Unpaid Leave",
+        SICK: "Sick Leave",
+        CASUAL: "Casual Leave",
+        COMP_OFF: "Comp Off",
+      };
+      return typeNames[type] || type;
+    };
+
+    /* ================= CSV EXPORT ================= */
+    if (format === "csv") {
+      const parser = new Parser({
+        fields: ["employee", "type", "startDate", "endDate", "days", "status", "reason", "responsiblePerson", "createdAt"]
+      });
+
+      const csv = parser.parse(
+        rows.map((r) => {
+          const days = r.type === "HALF_DAY" 
+            ? 0.5 
+            : Math.floor((new Date(r.endDate) - new Date(r.startDate)) / (1000 * 60 * 60 * 24)) + 1;
+
+          return {
+            employee: `${r.user.firstName} ${r.user.lastName || ""}`.trim(),
+            type: getLeaveTypeName(r.type),
+            startDate: r.startDate?.toISOString().split("T")[0],
+            endDate: r.endDate?.toISOString().split("T")[0],
+            days,
+            status: r.status,
+            reason: r.reason || "",
+            responsiblePerson: r.responsiblePerson 
+              ? `${r.responsiblePerson.firstName} ${r.responsiblePerson.lastName || ""}`.trim() 
+              : "",
+            createdAt: r.createdAt.toISOString().split("T")[0]
+          };
+        })
+      );
+
+      res.header("Content-Type", "text/csv");
+      res.attachment("leaves.csv");
+      return res.send(csv);
+    }
+
+    /* ================= EXCEL EXPORT ================= */
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Leaves");
+
+    sheet.columns = [
+      { header: "Employee", key: "employee", width: 25 },
+      { header: "Leave Type", key: "type", width: 15 },
+      { header: "Start Date", key: "startDate", width: 15 },
+      { header: "End Date", key: "endDate", width: 15 },
+      { header: "Days", key: "days", width: 10 },
+      { header: "Status", key: "status", width: 12 },
+      { header: "Reason", key: "reason", width: 30 },
+      { header: "Responsible Person", key: "responsiblePerson", width: 25 },
+      { header: "Created At", key: "createdAt", width: 15 },
+    ];
+
+    rows.forEach((r) => {
+      const days = r.type === "HALF_DAY" 
+        ? 0.5 
+        : Math.floor((new Date(r.endDate) - new Date(r.startDate)) / (1000 * 60 * 60 * 24)) + 1;
+
+      sheet.addRow({
+        employee: `${r.user.firstName} ${r.user.lastName || ""}`.trim(),
+        type: getLeaveTypeName(r.type),
+        startDate: r.startDate?.toISOString().split("T")[0],
+        endDate: r.endDate?.toISOString().split("T")[0],
+        days,
+        status: r.status,
+        reason: r.reason || "",
+        responsiblePerson: r.responsiblePerson 
+          ? `${r.responsiblePerson.firstName} ${r.responsiblePerson.lastName || ""}`.trim() 
+          : "",
+        createdAt: r.createdAt.toISOString().split("T")[0],
+      });
+    });
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", "attachment; filename=leaves.xlsx");
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (err) {
+    console.error("[exportLeaves ERROR]", err);
+    return res.status(500).json({ success: false, message: "Export failed" });
   }
 };

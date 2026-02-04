@@ -198,12 +198,15 @@ export default function Leaves() {
           l.status === "APPROVED" &&
           l.type !== "WFH" &&
           l.type !== "UNPAID" &&
-          l.type !== "COMP_OFF",
+          l.type !== "COMP_OFF" &&
+          // 🔥 ADD YEAR FILTER
+          new Date(l.startDate) >= new Date(yearStart) &&
+          new Date(l.endDate) <= new Date(yearEnd),
       ),
       holidaysList,
       weekOff,
     );
-  }, [leaves, holidaysList, weekOff]);
+  }, [leaves, holidaysList, weekOff, yearStart, yearEnd]);
 
   // ⭐ Approved WFH unique days
   const approvedWFHDays = getUniqueLeaveDays(
@@ -224,6 +227,15 @@ export default function Leaves() {
       new Date(l.startDate) >= new Date(yearStart) &&
       new Date(l.endDate) <= new Date(yearEnd),
   ).length;
+
+  // ⭐ Approved Unpaid Leaves (count)
+const approvedUnpaidCount = leaves.filter(
+  (l) =>
+    l.type?.toUpperCase() === "UNPAID" &&
+    l.status === "APPROVED" &&
+    new Date(l.startDate) >= new Date(yearStart) &&
+    new Date(l.endDate) <= new Date(yearEnd),
+).length;
 
   // ⭐ Remaining leaves
   const yearlyQuota = user?.stats?.yearlyQuota ?? 21;
@@ -436,22 +448,29 @@ export default function Leaves() {
       <PageTitle title="Leaves" sub="Manage your leaves & WFH" />
 
       {!isAdmin && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          <StatCard
-            icon={<FiClock className="text-green-500" />}
-            title="Approved Leave Days"
-            value={approvedLeaveDays}
-          />
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <StatCard
+  icon={<FiClock className="text-green-500" />}
+  title="Total Approved Leave"
+  subtitle="(Count Paid Leaves and HalfDays not CompOff and Unpaid Leaves)"
+  value={approvedLeaveDays}
+/>
           <StatCard
             icon={<FiClock className="text-blue-500" />}
             title="Approved WFH Days"
             value={approvedWFHDays}
           />
+<StatCard
+  icon={<FiClock className="text-green-500" />}
+  title="Approved HalfDay Count"
+  subtitle="(0.5 Leave deduct as per count)"
+  value={approvedHalfDay}
+/>
           <StatCard
-            icon={<FiClock className="text-green-500" />}
-            title="Half Day Approved"
-            value={approvedHalfDay}
-          />
+  icon={<FiClock className="text-gray-500" />}
+  title="Approved Unpaid Leaves"
+  value={approvedUnpaidCount}
+/>
           <StatCard
             icon={<FiClock className="text-teal-500" />}
             title="Comp-Off Balance"
@@ -970,13 +989,16 @@ function GlassCard({ children }) {
   );
 }
 
-function StatCard({ icon, title, value }) {
+function StatCard({ icon, title, subtitle, value }) {
   return (
     <div className="p-5 rounded-2xl bg-white dark:bg-gray-900 shadow border border-gray-200 dark:border-gray-700 flex items-center gap-4">
       <div className="text-3xl">{icon}</div>
       <div>
         <div className="text-xl font-bold">{value}</div>
         <div className="text-sm text-gray-500">{title}</div>
+        {subtitle && (
+          <div className="text-[10px] text-gray-400 leading-tight mt-0.5">{subtitle}</div>
+        )}
       </div>
     </div>
   );

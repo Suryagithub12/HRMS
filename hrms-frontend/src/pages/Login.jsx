@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import api from "../api/axios";
 import useAuthStore from "../stores/authstore";
 import { useNavigate } from "react-router-dom";
-import { FiMoon, FiSun } from "react-icons/fi";
+import { FiMoon, FiSun, FiDownload } from "react-icons/fi";
 import { FiEye, FiEyeOff } from "react-icons/fi";
 
 export default function Login() {
@@ -26,39 +26,54 @@ export default function Login() {
     document.documentElement.classList.toggle("dark", darkMode);
     localStorage.setItem("theme", darkMode ? "dark" : "light");
   }, [darkMode]);
+//  NEW useEffect
+useEffect(() => {
+  // Clear any stale authentication data on login page load
+  localStorage.removeItem("hrms_access");
+  localStorage.removeItem("hrms_refresh");
+  delete api.defaults.headers.common["Authorization"];
+}, []);
 
   const toggleTheme = () => setDarkMode((prev) => !prev);
 
   // ============================
   // LOGIN SUBMIT — UPDATED
   // ============================
-const submit = async (e) => {
-  e.preventDefault();
-  setErrMsg("");
-  setLoading(true);
-
-  try {
-    const res = await api.post("/auth/login", { email, password, loginType });
-    const { accessToken, user } = res.data;
-
-    localStorage.setItem("hrms_access", accessToken);
-    api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
-
-    // ✅ FULL USER SHOULD COME FROM LOGIN
-    setAuth(user, accessToken);
-
-    if (user.role === "ADMIN") {
-      navigate("/dashboard");
-    } else {
-      navigate("/attendance");
+  const submit = async (e) => {
+    e.preventDefault();
+    setErrMsg("");
+    setLoading(true);
+  
+    // Read values from DOM directly (fixes autofill/fingerprint issue)
+    const form = e.target;
+    const emailValue = form.email?.value?.trim() || email;
+    const passwordValue = form.password?.value || password;
+  
+    try {
+      const res = await api.post("/auth/login", { 
+        email: emailValue, 
+        password: passwordValue, 
+        loginType 
+      });
+      const { accessToken, user } = res.data;
+  
+      localStorage.setItem("hrms_access", accessToken);
+      api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+  
+      setAuth(user, accessToken);
+  
+      if (user.role === "ADMIN") {
+        navigate("/dashboard");
+      } else {
+        navigate("/attendance");
+      }
+  
+    } catch (err) {
+      setErrMsg(err.response?.data?.message || "Invalid credentials");
+    } finally {
+      setLoading(false);
     }
-
-  } catch (err) {
-    setErrMsg(err.response?.data?.message || "Invalid credentials");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center relative px-6 overflow-hidden
@@ -136,14 +151,30 @@ const submit = async (e) => {
         </div>
       </header>
 
-      {/* THEME TOGGLE */}
-      <button
-        onClick={toggleTheme}
-        className="absolute top-6 right-6 z-20 p-2 rounded-full bg-white/70 dark:bg-gray-800/70 
-          border border-gray-200 dark:border-gray-700 shadow-lg hover:scale-110 transition"
-      >
-        {darkMode ? <FiSun className="text-yellow-400" /> : <FiMoon />}
-      </button>
+{/* TOP RIGHT BUTTONS */}
+<div className="absolute top-6 right-6 z-20 flex items-center gap-3">
+  {/* DOWNLOAD PDF */}
+  <a
+    href="/HRMSUserGuide.pdf"
+    download
+    className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/70 dark:bg-gray-800/70 
+      border border-gray-200 dark:border-gray-700 shadow-lg hover:scale-105 transition"
+  >
+    <FiDownload className="text-indigo-600 dark:text-indigo-400" />
+    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+      How to Use HRMS?
+    </span>
+  </a>
+
+  {/* THEME TOGGLE */}
+  <button
+    onClick={toggleTheme}
+    className="p-2 rounded-full bg-white/70 dark:bg-gray-800/70 
+      border border-gray-200 dark:border-gray-700 shadow-lg hover:scale-110 transition"
+  >
+    {darkMode ? <FiSun className="text-yellow-400" /> : <FiMoon />}
+  </button>
+</div>
 
       {/* LOGIN CARD */}
       <div className="relative mx-auto w-full max-w-md p-[2px] rounded-3xl 
@@ -207,30 +238,32 @@ const submit = async (e) => {
 
             {/* EMAIL */}
             <input
-              required
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
-              className="w-full px-4 py-3 rounded-xl border bg-white/90 dark:bg-gray-900/70 
-              text-gray-800 dark:text-gray-100 placeholder-gray-400  
-              border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-indigo-400 transition"
-            />
+  name="email"              // 👈 ADD THIS
+  required
+  type="email"
+  autoComplete="email"
+  value={email}
+  onChange={(e) => setEmail(e.target.value)}
+  placeholder="you@company.com"
+  className="w-full px-4 py-3 rounded-xl border bg-white/90 dark:bg-gray-900/70 
+  text-gray-800 dark:text-gray-100 placeholder-gray-400  
+  border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-indigo-400 transition"
+/>
 
             {/* PASSWORD */}
             <div className="relative">
-              <input
-                required
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-4 py-3 rounded-xl border bg-white/90 dark:bg-gray-900/70 
-                text-gray-800 dark:text-gray-100 placeholder-gray-400 
-                border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-indigo-400 transition"
-              />
+<input
+  name="password"           // 👈 ADD THIS
+  required
+  type={showPassword ? "text" : "password"}
+  autoComplete="current-password"
+  value={password}
+  onChange={(e) => setPassword(e.target.value)}
+  placeholder="••••••••"
+  className="w-full px-4 py-3 rounded-xl border bg-white/90 dark:bg-gray-900/70 
+  text-gray-800 dark:text-gray-100 placeholder-gray-400 
+  border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-indigo-400 transition"
+/>
 
               <button
                 type="button"

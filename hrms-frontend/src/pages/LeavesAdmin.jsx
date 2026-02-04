@@ -245,6 +245,31 @@ try {
   setLoading(false);
 
 };
+/* ================= EXPORT ================= */
+const exportData = async (format) => {
+  try {
+    const res = await api.get(
+      `/leaves/export?format=${format}`,
+      { responseType: "blob" }
+    );
+
+    const blob = new Blob([res.data]);
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `leaves.${format === "csv" ? "csv" : "xlsx"}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("EXPORT ERROR:", err.response || err);
+    setMsg("Export failed");
+    setMsgType("error");
+  }
+};
 
   useEffect(() => {
     load();
@@ -509,7 +534,25 @@ const submitReject = async (reason) => {
       <PageTitle title="Leaves" sub="Admin Panel – Approve & Manage Leaves" />
 
       <GlassCard>
-        <h3 className="text-xl font-semibold mb-4">All Leave Requests</h3>
+      <div className="flex justify-between items-center mb-4">
+    <h3 className="text-xl font-semibold">All Leave Requests</h3>
+    
+    {/* EXPORT BUTTONS */}
+    <div className="flex gap-2">
+      <button
+        onClick={() => exportData("csv")}
+        className="px-4 py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+      >
+        Export CSV
+      </button>
+      <button
+        onClick={() => exportData("xlsx")}
+        className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"
+      >
+        Export Excel
+      </button>
+    </div>
+  </div>
 
         {loading ? (
           <div className="text-center py-6">Loading...</div>

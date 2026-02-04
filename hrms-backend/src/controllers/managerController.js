@@ -176,20 +176,24 @@ export const managerTodayAttendance = async (req, res) => {
         departments: { some: { departmentId: { in: deptIds } } },
         isActive: true,
       },
-      select: { id: true, firstName: true, lastName: true },
+      include: {
+        weeklyOffs: true,    // 🔥 FIXED: plural
+      },
     });
-
+    
     const employeeIds = employees.map((e) => e.id);
-
+    
     const { start, end } = todayRange();
-
+    const todayISO = toLocalISO(new Date());
+    const todayDayName = new Date().toLocaleDateString("en-US", { weekday: "long" });
+    
     const todayAttendance = await prisma.attendance.findMany({
       where: {
         userId: { in: employeeIds },
         date: { gte: start, lte: end },
       },
     });
-
+    
     const leaves = await prisma.leave.findMany({
       where: {
         userId: { in: employeeIds },
@@ -198,33 +202,63 @@ export const managerTodayAttendance = async (req, res) => {
         endDate: { gte: start },
       },
     });
-
+    
     const attendanceMap = {};
     todayAttendance.forEach((a) => {
       attendanceMap[a.userId] = a;
     });
-
+    
     const leaveMap = {};
     leaves.forEach((l) => {
       leaveMap[l.userId] = l.type;
     });
-
+    
+    // 🔥 FIXED: Handle array of weeklyOffs
+    const isWeekOff = (weeklyOffs) => {
+      if (!weeklyOffs || weeklyOffs.length === 0) return false;
+      
+      return weeklyOffs.some((wo) => {
+        if (wo.isFixed && wo.offDay === todayDayName) return true;
+        if (!wo.isFixed && wo.offDate === todayISO) return true;
+        return false;
+      });
+    };
+    
+    let weekOffPresentCount = 0;
+    let weekOffCount = 0;
+    
     const rows = employees.map((emp) => {
       let status = "ABSENT";
       let checkIn = null;
       let checkOut = null;
+      const empWeekOff = isWeekOff(emp.weeklyOffs);  // 🔥 FIXED: plural
+      
+      if (empWeekOff) {
+        weekOffCount++;
+      }
 
       if (leaveMap[emp.id]) {
-        status =
-          leaveMap[emp.id] === "WFH"
-            ? "WFH"
-            : leaveMap[emp.id] === "HALF_DAY"
-            ? "HALF_DAY"
-            : "LEAVE";
+        const leaveType = leaveMap[emp.id];
+        if (leaveType === "WFH") {
+          status = "WFH";
+        } else if (leaveType === "HALF_DAY") {
+          status = "HALF_DAY";
+        } else if (leaveType === "COMP_OFF") {
+          status = "COMP_OFF";
+        } else {
+          status = "LEAVE";
+        }
       } else if (attendanceMap[emp.id]) {
         status = attendanceMap[emp.id].status || "PRESENT";
         checkIn = attendanceMap[emp.id].checkIn;
         checkOut = attendanceMap[emp.id].checkOut;
+
+        // 🔥 WeekOff but still present
+        if (empWeekOff && (status === "PRESENT" || status === "LATE")) {
+          weekOffPresentCount++;
+        }
+      } else if (empWeekOff) {
+        status = "WEEK_OFF";
       }
 
       return {
@@ -237,17 +271,21 @@ export const managerTodayAttendance = async (req, res) => {
     });
 
     const summary = {
+      totalEmployees: employees.length,
       present: rows.filter((r) => r.status === "PRESENT").length,
-      late: rows.filter((r) => r.status === "LATE").length,
-      leave: rows.filter((r) => r.status === "LEAVE").length,
-      wfh: rows.filter((r) => r.status === "WFH").length,
       halfDay: rows.filter((r) => r.status === "HALF_DAY").length,
+      wfh: rows.filter((r) => r.status === "WFH").length,
+      weekOffPresent: weekOffPresentCount,
+      leave: rows.filter((r) => r.status === "LEAVE").length,
+      compOff: rows.filter((r) => r.status === "COMP_OFF").length,
+      weekOff: rows.filter((r) => r.status === "WEEK_OFF").length,
       absent: rows.filter((r) => r.status === "ABSENT").length,
+      late: rows.filter((r) => r.status === "LATE").length,
     };
 
     return res.json({
       success: true,
-      date: toLocalISO(new Date()),
+      date: todayISO,
       rows,
       summary,
     });
@@ -299,7 +337,6 @@ export const managerNotifications = async (req, res) => {
     // 1️⃣ Manager ke departments
     const depts = await prisma.department.findMany({
       where: {
-        isActive: true,
         managers: {
           some: { id: managerId },
         },
