@@ -240,7 +240,7 @@ const approvedUnpaidCount = leaves.filter(
   // ⭐ Remaining leaves
   const yearlyQuota = user?.stats?.yearlyQuota ?? 21;
 
-  const remainingLeaves = Math.max(yearlyQuota - approvedLeaveDays, 0);
+  const remainingLeaves = user?.stats?.remainingLeaves ?? Math.max(yearlyQuota - approvedLeaveDays, 0);
 
   useEffect(() => {
     const loadHolidays = async () => {
@@ -529,7 +529,7 @@ const approvedUnpaidCount = leaves.filter(
                   >
                     <option value="CASUAL">Casual Leave</option>
                     <option value="SICK">Sick Leave</option>
-                    <option value="PAID">Paid Leave</option>
+                    {/* <option value="PAID">Paid Leave</option> */}
                     <option value="UNPAID">Unpaid Leave</option>
                     <option value="COMP_OFF">Comp Off</option>
                     <option value="HALF_DAY">Half Day</option>

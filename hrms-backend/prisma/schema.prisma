@@ -155,8 +155,8 @@ model Leave {
   id           String    @id @default(uuid())
   userId       String
   type         LeaveType
-  startDate    DateTime
-  endDate      DateTime
+  startDate    DateTime    @db.Date 
+  endDate      DateTime    @db.Date 
   reason       String?
   status       String    @default("PENDING")
   approverId   String?

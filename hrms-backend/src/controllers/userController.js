@@ -101,13 +101,77 @@ export const getMe = async (req, res) => {
       });
     }
     // 🔥 ADD THIS FLAG
+    // 🔥 ADD THIS FLAG
     const isManager = user.managedDepartments.length > 0;
+
+    // ⭐ PRORATION LOGIC (same as getUserFullDetails)
+    const MONTHLY_CREDIT = 1.75;
+    const joinDate = new Date(user.createdAt);
+    const joinYear = joinDate.getFullYear();
+    const joinMonth = joinDate.getMonth(); // Jan = 0, Feb = 1
+
+    const currentYear = new Date().getFullYear();
+
+    // 🔥 PRORATED YEARLY QUOTA
+    const TOTAL_YEARLY_LEAVES =
+      joinYear === currentYear
+        ? 21 - joinMonth * MONTHLY_CREDIT  // Feb = 21 - 1*1.75 = 19.25
+        : 21;
+
+    const yearStart = new Date(`${currentYear}-01-01`);
+    const yearEnd = new Date(`${currentYear}-12-31`);
+
+    const yearlyLeaves = await prisma.leave.findMany({
+      where: {
+        userId: user.id,
+        startDate: { gte: yearStart },
+        endDate: { lte: yearEnd },
+        isAdminDeleted: false,
+        isEmployeeDeleted: false,
+      },
+    });
+
+    // Helper to count leave days
+    const getUniqueLeaveUnits = (leaves) => {
+      let total = 0;
+      for (const l of leaves) {
+        if (l.type === "HALF_DAY") {
+          total += 0.5;
+        } else {
+          const start = new Date(l.startDate);
+          const end = new Date(l.endDate);
+          const days = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+          total += days;
+        }
+      }
+      return total;
+    };
+
+    const approvedNormalLeaves = getUniqueLeaveUnits(
+      yearlyLeaves.filter(
+        (l) =>
+          l.status === "APPROVED" &&
+          !["WFH", "UNPAID", "COMP_OFF"].includes(l.type)
+      )
+    );
+
+    const remainingLeaves = Math.max(
+      TOTAL_YEARLY_LEAVES - approvedNormalLeaves,
+      0
+    );
+
+    const stats = {
+      approvedLeaves: approvedNormalLeaves,
+      remainingLeaves,
+      yearlyQuota: TOTAL_YEARLY_LEAVES,  // 🔥 PRORATED (19.25 for Feb joining)
+    };
 
     return res.json({
       success: true,
       user: {
         ...user,
-        isManager, // 👈 ⭐ IMPORTANT
+        isManager,
+        stats,  // ⭐ ADD THIS
       },
       credited,
     });

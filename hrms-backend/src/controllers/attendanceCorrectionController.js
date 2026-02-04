@@ -195,17 +195,18 @@ export const decideAttendanceCorrection = async (req, res) => {
       },
     });
 
-    // 2️⃣ cancel any single-day leave on that date and restore balance if needed
-    const leaves = await prisma.leave.findMany({
-      where: {
-        userId: reqItem.userId,
-        startDate: reqItem.date,
-        endDate: reqItem.date,
-        status: { in: ["PENDING", "APPROVED"] },
-        isAdminDeleted: false,
-        isEmployeeDeleted: false,
-      },
-    });
+// AFTER:
+// With @db.Date, reqItem.date is already date-only, direct comparison works
+const leaves = await prisma.leave.findMany({
+  where: {
+    userId: reqItem.userId,
+    startDate: { lte: reqItem.date },
+    endDate: { gte: reqItem.date },
+    status: { in: ["PENDING", "APPROVED"] },
+    isAdminDeleted: false,
+    isEmployeeDeleted: false,
+  },
+});
 
     for (const leave of leaves) {
       if (

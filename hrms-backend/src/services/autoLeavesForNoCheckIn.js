@@ -14,23 +14,19 @@ const toLocalISO = (date) => {
   );
 };
 
-const startOfDay = (dateISO) => {
+// AFTER:
+const toDateOnly = (dateISO) => {
+  // Returns date at UTC midnight - Prisma will store as DATE only
   const d = new Date(dateISO);
-  d.setHours(0, 0, 0, 0);
-  return d;
-};
-const endOfDay = (dateISO) => {
-  const d = new Date(dateISO);
-  d.setHours(23, 59, 59, 999);
+  d.setUTCHours(0, 0, 0, 0);
   return d;
 };
 
 export async function markAutoLeavesForDate(dateISO) {
-  const dateStart = startOfDay(dateISO);
-  const dateEnd = endOfDay(dateISO);
+  const dateOnly = toDateOnly(dateISO);
 
-  console.log("start date:", dateStart);
-  console.log("end date:", dateEnd);
+ // REMOVE these lines (or change to):
+console.log("date:", dateOnly);
 
   //  All active, non-admin users
   const users = await prisma.user.findMany({
@@ -47,16 +43,13 @@ export async function markAutoLeavesForDate(dateISO) {
     //  Skip if holiday (match by whole day range, not exact timestamp)
     const holiday = await prisma.holiday.findFirst({
       where: {
-        date: {
-          gte: dateStart,
-          lte: dateEnd,
-        },
+        date: dateOnly,   // Direct comparison with @db.Date
       },
     });
     if (holiday) continue;
 
     // Skip if weekly off for this user (fixed or roster)
-    const dayName = new Date(dateStart).toLocaleDateString("en-US", {
+    const dayName = new Date(dateOnly).toLocaleDateString("en-US", {
       weekday: "long",
       timeZone: "Asia/Kolkata",
     });
@@ -66,17 +59,12 @@ export async function markAutoLeavesForDate(dateISO) {
         userId: user.id,
         OR: [
           {
-            // Fixed weekly off, e.g. every Sunday
             isFixed: true,
             offDay: dayName,
           },
           {
-            // Roster / one-time off on a specific date
             isFixed: false,
-            offDate: {
-              gte: dateStart,
-              lte: dateEnd,
-            },
+            offDate: dateOnly,   // Direct comparison
           },
         ],
       },
@@ -85,41 +73,40 @@ export async function markAutoLeavesForDate(dateISO) {
     if (weeklyOff) continue;
 
     // Skip if already has APPROVED leave that covers this date
-    const existingLeave = await prisma.leave.findFirst({
-      where: {
-        userId: user.id,
-        status: "APPROVED",
-        startDate: { lte: dateStart },
-        endDate: { gte: dateEnd },
-        isAdminDeleted: false,
-        isEmployeeDeleted: false,
-      },
-    });
+// AFTER:
+const existingLeave = await prisma.leave.findFirst({
+  where: {
+    userId: user.id,
+    status: "APPROVED",
+    startDate: { lte: dateOnly },
+    endDate: { gte: dateOnly },
+    isAdminDeleted: false,
+    isEmployeeDeleted: false,
+  },
+});
     if (existingLeave) continue;
 
     // Skip if there is any attendance row for this date
     const attendance = await prisma.attendance.findFirst({
       where: {
         userId: user.id,
-        date: {
-          gte: dateStart,
-          lte: dateEnd,
-        },
+        date: dateOnly,   // Direct comparison
       },
     });
     if (attendance) continue;
 
     // UNPAID leave for that date
-    await prisma.leave.create({
-      data: {
-        userId: user.id,
-        type: "UNPAID",
-        startDate: dateStart,
-        endDate: dateEnd,
-        status: "APPROVED",
-        reason: "Auto-marked: no attendance recorded for this day",
-      },
-    });
+// AFTER:
+await prisma.leave.create({
+  data: {
+    userId: user.id,
+    type: "UNPAID",
+    startDate: dateOnly,
+    endDate: dateOnly,      // Same date for single day leave
+    status: "APPROVED",
+    reason: "Auto-marked: no attendance recorded for this day",
+  },
+});
 
     console.log(
       `[AUTO-LEAVE] UNPAID leave created for user=${user.id} on ${dateISO}`,
@@ -130,7 +117,7 @@ export async function markAutoLeavesForDate(dateISO) {
 }
 
 cron.schedule(
-  "5 19 * * *",
+  "3 18 * * *",
   async () => {
     console.log("[AUTO-LEAVE] Cron triggered at", new Date().toISOString());
     const now = new Date();

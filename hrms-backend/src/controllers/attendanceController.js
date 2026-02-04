@@ -411,9 +411,12 @@ export const getMyAttendance = async (req, res) => {
       /* =========================
       B️⃣ LEAVE (WFH / HALF_DAY / OTHERS)
       ========================= */
-      const leave = leaves.find(
-        (l) => new Date(l.startDate) <= cur && new Date(l.endDate) >= cur,
-      );
+    // AFTER:
+const leave = leaves.find((l) => {
+  const startISO = l.startDate.toISOString().slice(0, 10);  // "2026-02-04"
+  const endISO = l.endDate.toISOString().slice(0, 10);      // "2026-02-04"
+  return startISO <= iso && endISO >= iso;  // String comparison
+});
 
       if (leave) {
         const status =
@@ -589,19 +592,22 @@ export const getAllAttendance = async (req, res) => {
        5️⃣ MAPS
     ===================================================== */
 
-    const leaveMap = {};
-    leaves.forEach((l) => {
-      let cur = new Date(l.startDate);
-      cur.setHours(0, 0, 0, 0);
-      const last = new Date(l.endDate);
-      last.setHours(0, 0, 0, 0);
+// AFTER:
+const leaveMap = {};
+leaves.forEach((l) => {
+  const startISO = l.startDate.toISOString().slice(0, 10);
+  const endISO = l.endDate.toISOString().slice(0, 10);
+  
+  let curDate = new Date(startISO + "T00:00:00Z");
+  const lastDate = new Date(endISO + "T00:00:00Z");
 
-      while (cur <= last) {
-        const key = `${l.userId}_${toLocalISO(cur)}`;
-        leaveMap[key] = l.type; // PAID / SICK / CASUAL / WFH / HALF_DAY / COMP_OFF
-        cur.setDate(cur.getDate() + 1);
-      }
-    });
+  while (curDate <= lastDate) {
+    const iso = curDate.toISOString().slice(0, 10);
+    const key = `${l.userId}_${iso}`;
+    leaveMap[key] = l.type;
+    curDate.setUTCDate(curDate.getUTCDate() + 1);
+  }
+});
 
     const attendanceMap = {};
     attendances.forEach((a) => {
