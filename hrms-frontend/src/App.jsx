@@ -120,9 +120,9 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={["LYF_EMPLOYEE"]}>
               <LayoutPremium>
-                <FreelanceFAcultyManagerRoute>
+                <FreelanceFacultyManagerRoute>
                   <FreelanceFacultyPage/>
-                </FreelanceFAcultyManagerRoute>
+                </FreelanceFacultyManagerRoute>
               </LayoutPremium>
             </ProtectedRoute>
           }
