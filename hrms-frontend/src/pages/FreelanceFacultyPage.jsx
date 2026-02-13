@@ -10,6 +10,9 @@ import {
   getFacultySubjects as getFacultySubjectsAPI,
   upsertDayEntry,
   addClassesToDayEntry,
+  addYoutubeLecture,
+  getYoutubeLecturesForFaculty,
+  deleteDayEntry,
 } from "../data/freelanceFaculty";
 import useAuthStore from "../stores/authstore";
 
@@ -47,6 +50,8 @@ const FreelanceFacultyPage = () => {
   const [facultySubjects, setFacultySubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [statsScope, setStatsScope] = useState("ALL"); // ALL | THIS_MONTH
+  const [statsLoading, setStatsLoading] = useState(false);
   const [addBatchModalOpen, setAddBatchModalOpen] = useState(false);
   const [addBatchForm, setAddBatchForm] = useState({
     name: "",
@@ -72,6 +77,81 @@ const FreelanceFacultyPage = () => {
   const [addEntryError, setAddEntryError] = useState(null);
   const [addEntrySubmitting, setAddEntrySubmitting] = useState(false);
   const [addEntryOpening, setAddEntryOpening] = useState(false);
+
+  // YouTube lecture state
+  const [youtubeModalOpen, setYoutubeModalOpen] = useState(false);
+  const [youtubeDate, setYoutubeDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [youtubeTitle, setYoutubeTitle] = useState("");
+  const [youtubeDescription, setYoutubeDescription] = useState("");
+  const [youtubeError, setYoutubeError] = useState(null);
+  const [youtubeSubmitting, setYoutubeSubmitting] = useState(false);
+  const [youtubeLoading, setYoutubeLoading] = useState(false);
+  const [youtubeLectures, setYoutubeLectures] = useState([]);
+  const [youtubeScope, setYoutubeScope] = useState("THIS_MONTH"); // THIS_MONTH | ALL
+  const [youtubeCount, setYoutubeCount] = useState(0);
+
+  // Delete entry state
+  const [deleteEntryModalOpen, setDeleteEntryModalOpen] = useState(false);
+  const [deleteEntryDate, setDeleteEntryDate] = useState(new Date().toISOString().slice(0, 10));
+  const [deleteEntryList, setDeleteEntryList] = useState([]);
+  const [deleteEntryLoading, setDeleteEntryLoading] = useState(false);
+  const [deleteEntryError, setDeleteEntryError] = useState(null);
+  const [deletingEntryId, setDeletingEntryId] = useState(null);
+
+  const buildYoutubeRangeForScope = (scope) => {
+    if (scope !== "THIS_MONTH") {
+      return { from: undefined, to: undefined };
+    }
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth(); // 0-based
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    // Use local date parts so timezone doesn't shift the calendar day (e.g. IST would make Feb 1 → "2025-01-31" with toISOString)
+    const fmtLocal = (d) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+
+    return {
+      from: fmtLocal(firstDay),
+      to: fmtLocal(lastDay),
+    };
+  };
+
+  const buildStatsRangeForScope = (scope) => {
+    if (scope !== "THIS_MONTH") {
+      return { from: undefined, to: undefined };
+    }
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth(); // 0-based
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    // Use local date parts so timezone doesn't shift the calendar day
+    const fmtLocal = (d) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+
+    return {
+      from: fmtLocal(firstDay),
+      to: fmtLocal(lastDay),
+    };
+  };
 
   const fetchDetails = useCallback(async () => {
     if (!managerId || !facultyId) return;
@@ -101,15 +181,11 @@ const FreelanceFacultyPage = () => {
 
       setFaculty(found);
 
-      const [statsRes, entriesRes] = await Promise.all([
-        getFacultyStats(facultyId),
-        getFacultyEntriesInRange(facultyId, {
-          from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-          to: new Date().toISOString().slice(0, 10),
-        }),
-      ]);
+      const entriesRes = await getFacultyEntriesInRange(facultyId, {
+        from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        to: new Date().toISOString().slice(0, 10),
+      });
 
-      if (statsRes.stats) setStats(statsRes.stats);
       if (entriesRes.entries) setEntries(entriesRes.entries);
       if (entriesRes.error && !entriesRes.entries?.length) setEntries([]);
 
@@ -121,13 +197,12 @@ const FreelanceFacultyPage = () => {
       if (batchesRes.batches) setBatches(batchesRes.batches);
       if (subjectsRes.subjects) {
         setSubjects(subjectsRes.subjects);
-        console.log("Subjects loaded:", subjectsRes.subjects);
+        
       } else if (subjectsRes.error) {
         console.error("Failed to load subjects:", subjectsRes.error);
       }
       if (facultySubjectsRes.subjects) {
         setFacultySubjects(facultySubjectsRes.subjects);
-        console.log("Faculty subjects loaded:", facultySubjectsRes.subjects);
       } else if (facultySubjectsRes.error) {
         console.error("Failed to load faculty subjects:", facultySubjectsRes.error);
       }
@@ -142,6 +217,158 @@ const FreelanceFacultyPage = () => {
   useEffect(() => {
     fetchDetails();
   }, [fetchDetails]);
+
+  const loadStats = useCallback(
+    async (scope) => {
+      if (!facultyId) return;
+
+      const { from, to } = buildStatsRangeForScope(scope);
+
+      setStatsLoading(true);
+      try {
+        const { stats: statsData, error: statsError } = await getFacultyStats(facultyId, {
+          from,
+          to,
+        });
+
+        if (statsError) {
+          console.error("Failed to load stats:", statsError);
+          setStats(null);
+          return;
+        }
+
+        if (statsData) {
+          setStats(statsData);
+        }
+      } catch (err) {
+        console.error("loadStats:", err);
+        setStats(null);
+      } finally {
+        setStatsLoading(false);
+      }
+    },
+    [facultyId]
+  );
+
+  useEffect(() => {
+    if (facultyId) {
+      setStatsScope("ALL");
+      loadStats("ALL");
+    }
+  }, [facultyId, loadStats]);
+
+  const loadYoutubeLectures = useCallback(
+    async (scope) => {
+      if (!facultyId) return;
+
+      const { from, to } = buildYoutubeRangeForScope(scope);
+
+      setYoutubeLoading(true);
+      setYoutubeError(null);
+
+      try {
+        const { data, error } = await getYoutubeLecturesForFaculty(
+          facultyId,
+          { from, to }
+        );
+
+        if (error || !data?.success) {
+          setYoutubeLectures([]);
+          setYoutubeCount(0);
+          setYoutubeError(
+            error?.response?.data?.message ??
+              error?.message ??
+              data?.message ??
+              "Failed to load YouTube lectures."
+          );
+          return;
+        }
+
+        const lectures = Array.isArray(data.lectures)
+          ? data.lectures
+          : [];
+        setYoutubeLectures(lectures);
+        setYoutubeCount(
+          typeof data.count === "number" ? data.count : lectures.length
+        );
+      } catch (err) {
+        console.error("loadYoutubeLectures:", err);
+        setYoutubeLectures([]);
+        setYoutubeCount(0);
+        setYoutubeError(
+          err?.response?.data?.message ??
+            err?.message ??
+            "Failed to load YouTube lectures."
+        );
+      } finally {
+        setYoutubeLoading(false);
+      }
+    },
+    [facultyId]
+  );
+
+  useEffect(() => {
+    if (facultyId) {
+      setYoutubeScope("THIS_MONTH");
+      loadYoutubeLectures("THIS_MONTH");
+    }
+  }, [facultyId, loadYoutubeLectures]);
+
+  const loadEntriesForDate = useCallback(async (date) => {
+    if (!facultyId || !date) return;
+    
+    setDeleteEntryLoading(true);
+    setDeleteEntryError(null);
+    
+    try {
+      const { entries, error } = await getFacultyEntriesInRange(facultyId, {
+        from: date,
+        to: date,
+      });
+      
+      if (error) {
+        setDeleteEntryError(error);
+        setDeleteEntryList([]);
+        return;
+      }
+      
+      setDeleteEntryList(entries || []);
+    } catch (err) {
+      console.error("loadEntriesForDate:", err);
+      setDeleteEntryError(err?.message ?? "Failed to load entries");
+      setDeleteEntryList([]);
+    } finally {
+      setDeleteEntryLoading(false);
+    }
+  }, [facultyId]);
+
+  const handleDeleteEntry = async (entryId) => {
+    if (!facultyId || !entryId) return;
+    
+    setDeletingEntryId(entryId);
+    setDeleteEntryError(null);
+    
+    try {
+      const { success, error } = await deleteDayEntry(facultyId, entryId);
+      
+      if (error || !success) {
+        setDeleteEntryError(error ?? "Failed to delete entry");
+        return;
+      }
+      
+      // Refresh the list for the selected date
+      await loadEntriesForDate(deleteEntryDate);
+      
+      // Refresh stats and entries list
+      await loadStats(statsScope);
+      await fetchDetails();
+    } catch (err) {
+      console.error("handleDeleteEntry:", err);
+      setDeleteEntryError(err?.message ?? "Failed to delete entry");
+    } finally {
+      setDeletingEntryId(null);
+    }
+  };
 
   const fetchBatches = useCallback(async () => {
     const res = await listBatches();
@@ -226,6 +453,63 @@ const FreelanceFacultyPage = () => {
     }
   };
 
+  const openYoutubeModal = () => {
+    setYoutubeError(null);
+    setYoutubeDate(new Date().toISOString().slice(0, 10));
+    setYoutubeUrl("");
+    setYoutubeTitle("");
+    setYoutubeDescription("");
+    setYoutubeModalOpen(true);
+  };
+
+  const handleYoutubeSubmit = async (e) => {
+    e.preventDefault();
+    setYoutubeError(null);
+
+    if (!youtubeDate || !youtubeUrl.trim()) {
+      setYoutubeError("Date and YouTube URL are required.");
+      return;
+    }
+
+    setYoutubeSubmitting(true);
+    try {
+      const { data, error } = await addYoutubeLecture({
+        facultyId,
+        date: youtubeDate,
+        youtubeUrl: youtubeUrl.trim(),
+        title: youtubeTitle.trim() || undefined,
+        description: youtubeDescription.trim() || undefined,
+      });
+
+      if (error || !data?.success) {
+        setYoutubeError(
+          error?.response?.data?.message ??
+            error?.message ??
+            data?.message ??
+            "Failed to add YouTube lecture."
+        );
+        return;
+      }
+
+      // Refresh list for current scope
+      await loadYoutubeLectures(youtubeScope);
+
+      // Keep modal open for adding multiple, but reset fields (except date)
+      setYoutubeUrl("");
+      setYoutubeTitle("");
+      setYoutubeDescription("");
+    } catch (err) {
+      console.error("handleYoutubeSubmit:", err);
+      setYoutubeError(
+        err?.response?.data?.message ??
+          err?.message ??
+          "Failed to add YouTube lecture."
+      );
+    } finally {
+      setYoutubeSubmitting(false);
+    }
+  };
+
 
   const calculateDuration = (startTime, endTime) => {
     if (!startTime || !endTime) return 0;
@@ -299,6 +583,8 @@ const FreelanceFacultyPage = () => {
 
       setAddEntryModalOpen(false);
       await fetchDetails();
+      // Refresh stats with current scope
+      await loadStats(statsScope);
     } finally {
       setAddEntrySubmitting(false);
     }
@@ -436,48 +722,163 @@ const FreelanceFacultyPage = () => {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
-        <div className="rounded-2xl border bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-            Total entries
+      <div className="overflow-hidden rounded-2xl border bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Statistics
+          </h2>
+          <select
+            value={statsScope}
+            onChange={async (e) => {
+              const nextScope = e.target.value;
+              setStatsScope(nextScope);
+              await loadStats(nextScope);
+            }}
+            disabled={statsLoading}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+          >
+            <option value="ALL">All time</option>
+            <option value="THIS_MONTH">This month</option>
+          </select>
+        </div>
+        <div className="p-6">
+          {statsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-indigo-600" />
+                <span>Loading stats…</span>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+              <div className="rounded-2xl border bg-gray-50/50 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50">
+                <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Total entries
+                </div>
+                <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  {stats?.totalDayEntries ?? faculty?.totalEntries ?? 0}
+                </div>
+              </div>
+              <div className="rounded-2xl border bg-gray-50/50 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50">
+                <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Total classes
+                </div>
+                <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  {stats?.totalClasses ?? faculty?.totalClasses ?? 0}
+                </div>
+              </div>
+              <div className="rounded-2xl border bg-gray-50/50 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50">
+                <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Total hours
+                </div>
+                <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  {stats?.totalDurationMinutes != null
+                    ? (stats.totalDurationMinutes / 60).toFixed(1)
+                    : faculty?.totalHours ?? 0}
+                </div>
+              </div>
+              <div className="rounded-2xl border bg-gray-50/50 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50">
+                <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Present days
+                </div>
+                <div className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                  {stats?.presentDays ?? "—"}
+                </div>
+              </div>
+              <div className="rounded-2xl border bg-gray-50/50 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50">
+                <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Absent days
+                </div>
+                <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  {stats?.absentDays ?? "—"}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* YouTube lectures */}
+      <div className="overflow-hidden rounded-2xl border bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              YouTube lectures
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {youtubeScope === "THIS_MONTH" ? "This month" : "All time"} •{" "}
+              {youtubeCount} video{youtubeCount === 1 ? "" : "s"}
+            </p>
           </div>
-          <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {stats?.totalDayEntries ?? faculty?.totalEntries ?? 0}
+          <div className="flex items-center gap-2">
+            <select
+              value={youtubeScope}
+              onChange={async (e) => {
+                const nextScope = e.target.value;
+                setYoutubeScope(nextScope);
+                await loadYoutubeLectures(nextScope);
+              }}
+              className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+            >
+              <option value="THIS_MONTH">This month</option>
+              <option value="ALL">All time</option>
+            </select>
+            <button
+              type="button"
+              onClick={openYoutubeModal}
+              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+            >
+              Add YouTube lecture
+            </button>
           </div>
         </div>
-        <div className="rounded-2xl border bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-            Total classes
-          </div>
-          <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {stats?.totalClasses ?? faculty?.totalClasses ?? 0}
-          </div>
-        </div>
-        <div className="rounded-2xl border bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-            Total hours
-          </div>
-          <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {stats?.totalDurationMinutes != null
-              ? (stats.totalDurationMinutes / 60).toFixed(1)
-              : faculty?.totalHours ?? 0}
-          </div>
-        </div>
-        <div className="rounded-2xl border bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-            Present days
-          </div>
-          <div className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-            {stats?.presentDays ?? "—"}
-          </div>
-        </div>
-        <div className="rounded-2xl border bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-            Absent days
-          </div>
-          <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {stats?.absentDays ?? "—"}
-          </div>
+        <div className="p-6">
+          {youtubeLoading ? (
+            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-indigo-600" />
+              <span>Loading lectures…</span>
+            </div>
+          ) : youtubeError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+              {youtubeError}
+            </div>
+          ) : youtubeLectures.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No YouTube lectures in this period.
+            </p>
+          ) : (
+            <div className="max-h-[150px] overflow-y-auto pr-2">
+              <ul className="space-y-2">
+                {youtubeLectures.map((lec) => (
+                  <li
+                    key={lec.id}
+                    className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50/50 p-3 text-sm dark:border-gray-700 dark:bg-gray-800/50"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <a
+                          href={lec.youtubeUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="truncate font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                        >
+                          {lec.title || "YouTube lecture"}
+                        </a>
+                        <span className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
+                          {formatDate(lec.date)}
+                        </span>
+                      </div>
+                      {lec.description && (
+                        <p className="mt-1 line-clamp-2 text-xs text-gray-600 dark:text-gray-400">
+                          {lec.description}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
 
@@ -827,23 +1228,129 @@ const FreelanceFacultyPage = () => {
         </div>
       )}
 
+      {/* Add YouTube lecture modal */}
+      {youtubeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl border bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
+            <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Add YouTube lecture
+              </h3>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                For {faculty?.name ?? "faculty"}
+              </p>
+            </div>
+            <form onSubmit={handleYoutubeSubmit} className="space-y-4 p-6">
+              {youtubeError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+                  {youtubeError}
+                </div>
+              )}
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={youtubeDate}
+                  onChange={(e) => setYoutubeDate(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                  required
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  YouTube URL <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="url"
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                  required
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  value={youtubeTitle}
+                  onChange={(e) => setYoutubeTitle(e.target.value)}
+                  placeholder="Optional title for the lecture"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Description
+                </label>
+                <textarea
+                  rows={3}
+                  value={youtubeDescription}
+                  onChange={(e) => setYoutubeDescription(e.target.value)}
+                  placeholder="Optional short description"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                />
+              </div>
+              <div className="mt-2 flex justify-end gap-2 border-t border-gray-200 pt-4 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setYoutubeModalOpen(false)}
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                  disabled={youtubeSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={youtubeSubmitting}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+                >
+                  {youtubeSubmitting ? "Saving…" : "Add lecture"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Recent entries */}
       <div className="overflow-hidden rounded-2xl border bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-6 py-4 dark:border-gray-800">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             Recent entries (last 30 days)
           </h2>
-          <button
-            type="button"
-            onClick={openAddEntryModal}
-            disabled={addEntryOpening}
-            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-60 dark:focus:ring-offset-gray-900"
-          >
-            {addEntryOpening && (
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-            )}
-            <span>{addEntryOpening ? "Preparing…" : "Add entry"}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                const currentDate = new Date().toISOString().slice(0, 10);
+                setDeleteEntryModalOpen(true);
+                setDeleteEntryDate(currentDate);
+                setDeleteEntryList([]);
+                setDeleteEntryError(null);
+                // Load entries for the current date
+                await loadEntriesForDate(currentDate);
+              }}
+              className="inline-flex items-center rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:border-red-600 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-gray-700"
+            >
+              Remove entry
+            </button>
+            <button
+              type="button"
+              onClick={openAddEntryModal}
+              disabled={addEntryOpening}
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-60 dark:focus:ring-offset-gray-900"
+            >
+              {addEntryOpening && (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              )}
+              <span>{addEntryOpening ? "Preparing…" : "Add entry"}</span>
+            </button>
+          </div>
         </div>
         {entries.length === 0 ? (
           <div className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -910,6 +1417,134 @@ const FreelanceFacultyPage = () => {
           </div>
         )}
       </div>
+
+      {/* Delete Entry Modal */}
+      {deleteEntryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-2xl border bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
+            <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Remove Entry
+              </h3>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Select a date to view and remove entries
+              </p>
+            </div>
+            
+            <div className="space-y-4 p-6">
+              {deleteEntryError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+                  {deleteEntryError}
+                </div>
+              )}
+              
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={deleteEntryDate}
+                  onChange={async (e) => {
+                    const date = e.target.value;
+                    setDeleteEntryDate(date);
+                    await loadEntriesForDate(date);
+                  }}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                  required
+                />
+              </div>
+              
+              {deleteEntryLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-indigo-600" />
+                    <span>Loading entries…</span>
+                  </div>
+                </div>
+              ) : deleteEntryList.length === 0 ? (
+                <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                  No entries found for this date.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    Entries for {formatDate(deleteEntryDate)}
+                  </h4>
+                  <ul className="space-y-2">
+                    {deleteEntryList.map((entry) => (
+                      <li
+                        key={entry.id}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50/50 p-3 dark:border-gray-700 dark:bg-gray-800/50"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-medium ${entry.isPresent ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                              {entry.isPresent ? 'Present' : 'Absent'}
+                            </span>
+                            {entry.remarks && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                • {entry.remarks}
+                              </span>
+                            )}
+                          </div>
+                          {entry.classes?.length > 0 && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {entry.classes.map((c) => (
+                                <span
+                                  key={c.id}
+                                  className="text-xs text-gray-600 dark:text-gray-400"
+                                >
+                                  {c.batch?.name} / {c.subject?.name} ({c.duration}m)
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEntry(entry.id)}
+                          disabled={deletingEntryId === entry.id}
+                          className="flex items-center gap-1 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-600 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-gray-700"
+                        >
+                          {deletingEntryId === entry.id ? (
+                            <>
+                              <span className="h-4 w-4 animate-spin rounded-full border-2 border-red-300 border-t-red-600" />
+                              <span>Removing…</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              <span>Remove</span>
+                            </>
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex justify-end gap-2 border-t border-gray-200 px-6 py-4 dark:border-gray-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteEntryModalOpen(false);
+                  setDeleteEntryDate(new Date().toISOString().slice(0, 10));
+                  setDeleteEntryList([]);
+                  setDeleteEntryError(null);
+                }}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

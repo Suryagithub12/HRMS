@@ -53,10 +53,6 @@ const FreelanceManagerDashboard = () => {
     handleFetchFaculties(managerId);
   }, [managerId, handleFetchFaculties]);
 
-  useEffect(() => {
-    console.log("ManagerId:", managerId);
-    console.log("Faculties:", faculties);
-  }, [managerId, faculties]);
 
   const totalEntries = faculties.reduce(
     (sum, f) => sum + (f.totalEntries || 0),

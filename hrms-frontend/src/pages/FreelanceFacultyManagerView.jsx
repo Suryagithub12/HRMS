@@ -66,14 +66,30 @@ export default function FreelanceFacultyManagerView() {
   const [changeError, setChangeError] = useState(null);
 
   const SUBJECT_OPTIONS = [
-    "Maths",
-    "Science",
+    "English", 
+    "General Knowledge",
+    "Logical Reasoning",
+    "Quantitative Aptitude",
+    "Economics",
+    "Accountancy",
+    "Business Studies",
     "Physics",
     "Chemistry",
-    "Biology",
-    "English",
-    "Computer Science",
+    "Mathematics", 
+    "Biology", 
+    "History", 
+    "Political Science", 
+    "Geography", 
+    "Psychology", 
+    "Philosophy", 
+    "Sociology",
+    "Anthropology", 
+    "Computer Science / Information Practices", 
+    "Environmental Sciences", 
+    "Physical Education", 
+    "Mass Media / Mass Communication"
   ];
+ 
 
   const DAY_OPTIONS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
@@ -389,7 +405,7 @@ export default function FreelanceFacultyManagerView() {
                   onChange={(e) => setAssignEmail(e.target.value)}
                   placeholder="e.g. faculty@example.com"
                   className="w-full rounded-xl border bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none focus:border-indigo-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
-                  required
+                 
                 />
               </div>
 
@@ -403,7 +419,7 @@ export default function FreelanceFacultyManagerView() {
                   onChange={(e) => setAssignPhone(e.target.value)}
                   placeholder="e.g. 9876543210"
                   className="w-full rounded-xl border bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none focus:border-indigo-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
-                  required
+                  
                 />
               </div>
 

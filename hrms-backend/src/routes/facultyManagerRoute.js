@@ -10,10 +10,12 @@ import {
 } from "../controllers/freelanceFacultyAdminController.js";
 import {
   addClassesToDayEntry,
+  addYoutubeLectureForFaculty,
   createBatch,
   createSubject,
   deleteBatch,
   deleteClass,
+  deleteDayEntry,
   deleteSubject,
   getBatchById,
   getDayEntriesByDate,
@@ -21,10 +23,12 @@ import {
   getFacultyEntriesInRange,
   getFacultyStats,
   getFacultySubjects,
+  getFacultyYoutubeStats,
   getManagerFacultiesStats,
   getSubjectById,
   listBatches,
   listSubjects,
+  listYoutubeLecturesForFaculty,
   updateBatch,
   updateClass,
   updateDayEntry,
@@ -57,6 +61,7 @@ router.get("/faculty/:facultyId/entries", requireAuth(["ADMIN", "LYF_EMPLOYEE"])
 router.patch("/day-entry/:dayEntryId", requireAuth(["ADMIN", "LYF_EMPLOYEE"]), updateDayEntry);
 router.get("/day-entries", requireAuth(["LYF_EMPLOYEE"]), getDayEntriesByDate);
 router.get("/day-entry/:dayEntryId", requireAuth(["ADMIN", "LYF_EMPLOYEE"]), getDayEntryById);
+router.delete("/faculty/:facultyId/entry/:dayEntryId",requireAuth(["LYF_EMPLOYEE"]),deleteDayEntry);
 
 // ----------------------------- Classes -----------------------------
 router.post("/day-entry/:dayEntryId/classes", requireAuth(["ADMIN", "LYF_EMPLOYEE"]), addClassesToDayEntry);
@@ -77,5 +82,10 @@ router.post("/subjects", requireAuth(["ADMIN", "LYF_EMPLOYEE"]), createSubject);
 router.get("/subjects/:subjectId", requireAuth(["ADMIN", "LYF_EMPLOYEE"]), getSubjectById);
 router.patch("/subjects/:subjectId", requireAuth(["ADMIN", "LYF_EMPLOYEE"]), updateSubject);
 router.delete("/subjects/:subjectId", requireAuth(["ADMIN", "LYF_EMPLOYEE"]), deleteSubject);
+
+// -------------------------- Youtube lectures -------------------------
+router.post( "/freelance-faculty/:facultyId/youtube-lectures",requireAuth(["LYF_EMPLOYEE"]),addYoutubeLectureForFaculty);
+router.get( "/freelance-faculty/:facultyId/youtube-lectures",requireAuth(["LYF_EMPLOYEE"]),listYoutubeLecturesForFaculty);
+router.get(  "/freelance-faculty/:facultyId/youtube-stats",requireAuth(["ADMIN","LYF_EMPLOYEE"]),getFacultyYoutubeStats);
 
 export default router;

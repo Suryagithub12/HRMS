@@ -151,7 +151,7 @@ export const assignFreelanceFaculty=async (req,res)=>{
     const {managerId,name,email,phone,joiningDate,subjects,preferredDaysOfWeek}=req.body;
 
       // Validation: Required fields
-    if (!managerId || !name || !subjects || !preferredDaysOfWeek || !email || !phone || !joiningDate) {
+    if (!managerId || !name || !subjects || !preferredDaysOfWeek || !joiningDate) {
       return res.status(400).json({
         success: false,
         message: "Manager ID, name, subjects, email, phone number, joining date and preferred days are required"

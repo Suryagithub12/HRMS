@@ -125,9 +125,17 @@ export const listFacultiesForManager=async (managerId)=>{
 }
 
 // get stats for a single faculty (ADMIN or manager of that faculty)
-export const getFacultyStats = async (facultyId) => {
+// Optional date range: { from, to } as YYYY-MM-DD strings
+export const getFacultyStats = async (facultyId, { from, to } = {}) => {
   try {
-    const res = await api.get(`/freelance/faculty/${facultyId}/stats`);
+    const params = new URLSearchParams();
+    if (from) params.append("from", from);
+    if (to) params.append("to", to);
+    
+    const queryString = params.toString();
+    const url = `/freelance/faculty/${facultyId}/stats${queryString ? `?${queryString}` : ""}`;
+    
+    const res = await api.get(url);
     const data = res?.data;
     if (data?.success && data?.stats) return { stats: data.stats, error: null };
     return { stats: null, error: data?.message ?? "Failed to load stats." };
@@ -251,6 +259,49 @@ export const addClassesToDayEntry = async (dayEntryId, classes) => {
     return {
       classes: null,
       error: err?.response?.data?.message ?? err?.message ?? "Failed to add classes.",
+    };
+  }
+};
+
+// ---------------- Youtube Lectures ------------------
+export const addYoutubeLecture=async({ facultyId, date, youtubeUrl, title, description })=>{
+  try{
+    const res=await api.post(`/freelance/freelance-faculty/${facultyId}/youtube-lectures`,{ date, youtubeUrl, title, description });
+    return {data:res.data,error:null};
+  }catch(error){
+    return {
+      data:null,
+      error
+    }
+  }
+}
+
+export const getYoutubeLecturesForFaculty=async (facultyId, { from, to } = {})=>{
+  try{
+    const res=await api.get( `/freelance/freelance-faculty/${facultyId}/youtube-lectures`,
+      { params: { from, to } } );
+    return {
+      data:res.data,
+      error:null
+    }
+  }catch(error){
+    return {data:null,error}
+  }
+}
+
+
+// --------------------Delete Faculty Day Entry--------------------
+export const deleteDayEntry = async (facultyId, dayEntryId) => {
+  try {
+    const res = await api.delete(`/freelance/faculty/${facultyId}/entry/${dayEntryId}`);
+    const data = res?.data;
+    if (data?.success) return { success: true, error: null };
+    return { success: false, error: data?.message ?? "Failed to delete entry." };
+  } catch (err) {
+    console.log("deleteDayEntry:", err);
+    return {
+      success: false,
+      error: err?.response?.data?.message ?? err?.message ?? "Failed to delete entry.",
     };
   }
 };
