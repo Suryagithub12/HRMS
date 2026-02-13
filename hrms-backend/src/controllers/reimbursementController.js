@@ -6,6 +6,7 @@ import { sendRequestNotificationMail } from "../utils/sendMail.js";
 import { getAdminAndManagers } from "../utils/getApprovers.js";
 import { Parser } from "json2csv";
 import ExcelJS from "exceljs";
+import { emitToUsers } from "../socket/socketServer.js";
 
 /* =====================================================
    📦 STORAGE
@@ -186,10 +187,11 @@ approvers = approvers.filter(m => m.id !== req.user.id);
 
 // If after filter no manager remains → stop (DON'T fallback to admin)
 if(approvers.length === 0){
-  return res.status(400).json({
-    success:false,
-    message:"No manager available for approval"
+  const admins = await prisma.user.findMany({
+    where:{ role:"ADMIN", isActive:true }
   });
+
+  approvers = admins;
 }
 
 // Create approval entries
@@ -334,11 +336,52 @@ export const updateReimbursement = async (req, res) => {
           title: title.trim(),
           description: description || "",
           totalAmount,
+
+          isAdminDeleted: false,
+          status: "PENDING",
+          rejectReason: null
         },
       }),
       prisma.bill.deleteMany({ where: { reimbursementId: id } }),
       prisma.bill.createMany({ data: billData }),
     ]);
+    
+    await prisma.reimbursementApproval.updateMany({
+  where: { reimbursementId: id },
+  data: {
+    status: "PENDING",
+    reason: null,
+    actedAt: null
+  }
+});
+const employee = await prisma.user.findUnique({
+  where:{ id: reimbursement.userId },
+  include:{
+    departments:{
+      include:{
+        department:{
+          include:{ managers:true }
+        }
+      }
+    }
+  }
+});
+
+if (employee) {
+  const managerIds = [
+    ...new Set(
+      employee.departments.flatMap(d =>
+        d.department.managers.map(m => m.id)
+      )
+    )
+  ];
+
+  emitToUsers(managerIds,"reimbursement_updated",{
+    reimbursementId:id,
+    title,
+    message:"Employee updated reimbursement request"
+  });
+}
 
     res.json({
       success: true,
@@ -405,6 +448,7 @@ export const getManagerReimbursements = async (req, res) => {
     const reimbursements = await prisma.reimbursement.findMany({
       where: {
         isAdminDeleted: false, 
+        isEmployeeDeleted: false,   
         user: {
           isActive: true,  
           departments: {
@@ -443,7 +487,11 @@ export const getAllReimbursements = async (req, res) => {
       return res.status(403).json({ success: false, message: "Admin only" });
 
 const list = await prisma.reimbursement.findMany({
-  where: { isAdminDeleted: false,  user: { isActive: true }   },
+  where: {
+  isAdminDeleted: false,
+  isEmployeeDeleted: false,   // ⭐ ADD THIS
+  user: { isActive: true }
+},
   include: {
     user: true,
     bills: true,
@@ -559,7 +607,7 @@ if (!reimbursement.user.isActive) {
     if (reimbursement.userId === actorId) {
       return res.status(403).json({
         success: false,
-        message: "You cannot approve your own reimbursement",
+        message: "You cannot approve/reject your own reimbursement",
       });
     }
 
@@ -691,7 +739,12 @@ const formatUrl = (url) => {
   return `${BASE_URL}/${url}`;
 };
 
-    const where = { isAdminDeleted: false ,  user: { isActive: true } };
+  const where = {
+  isAdminDeleted: false,
+  isEmployeeDeleted: false,  // ⭐ ADD
+  user: { isActive: true }
+};
+
 
     // Role based filter
     if (user.role !== "ADMIN") where.userId = user.id;
