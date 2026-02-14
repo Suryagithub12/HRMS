@@ -12,16 +12,39 @@ async function getManagerRecord(userId) {
 export const getFacultyStats = async (req, res) => {
   try {
     const { facultyId } = req.params;
+    const { from, to } = req.query; // Date range query parameters (YYYY-MM-DD)
     const userId = req.user?.id;
     const isAdmin = req.user?.role === "ADMIN";
+
+    // Build date filter for dayEntries
+    const dateFilter = {};
+    if (from || to) {
+      dateFilter.date = {};
+      if (from) {
+        dateFilter.date.gte = new Date(from);
+      }
+      if (to) {
+        // Include the entire day by setting to end of day
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        dateFilter.date.lte = toDate;
+      }
+    }
 
     const faculty = await prisma.freelanceFaculty.findUnique({
       where: { id: facultyId },
       include: {
         dayEntries: {
+          where: dateFilter,
           include: { classes: true },
         },
-        _count: { select: { dayEntries: true } },
+        _count: {
+          select: {
+            dayEntries: {
+              where: dateFilter,
+            },
+          },
+        },
       },
     });
 
@@ -700,3 +723,187 @@ export const getFacultySubjects = async (req, res) => {
     return res.status(500).json({ success: false, message: "Failed to get faculty subjects" });
   }
 };
+
+
+// ================Freelance faculty youtube controller=======================
+export const addYoutubeLectureForFaculty=async(req,res)=>{
+  try{
+    const { facultyId } = req.params;
+    const { date, youtubeUrl, title, description, meta } = req.body;
+
+    if (!facultyId || !date || !youtubeUrl) {
+      return res.status(400).json({
+        success: false,
+        message: "facultyId, date and youtubeUrl are required",
+      });
+    }
+
+    // Basic URL validation
+    if (!/^https?:\/\/(www\.)?youtube\.com\/|^https?:\/\/youtu\.be\//.test(youtubeUrl)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid YouTube URL",
+      });
+    }
+
+    // Ensure faculty exists
+    const faculty = await prisma.freelanceFaculty.findUnique({
+      where: { id: facultyId },
+    });
+    if (!faculty) {
+      return res.status(404).json({
+        success: false,
+        message: "Faculty not found",
+      });
+    }
+
+    const lecture = await prisma.youtubeLecture.create({
+      data: {
+        facultyId,
+        date: new Date(date),
+        youtubeUrl: youtubeUrl.trim(),
+        title: title?.trim() || null,
+        description: description?.trim() || null,
+        meta: meta ?? undefined,
+      },
+    });
+
+    // Count after insert
+    const count = await prisma.youtubeLecture.count({
+      where: { facultyId },
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "YouTube lecture added successfully",
+      lecture,
+      youtubeLectureCount: count,
+    });
+
+  }catch(err){
+    console.log(err);
+    return res.status(500).json({
+      success:false,
+      error:err
+    })
+  }
+}
+
+// =====================list freelance faculty videos=========================
+export const listYoutubeLecturesForFaculty=async (req,res)=>{
+  try{
+    const { facultyId } = req.params;
+    const { from, to } = req.query;
+
+    if (!facultyId) {
+      return res.status(400).json({
+        success: false,
+        message: "facultyId is required",
+      });
+    }
+
+    const faculty = await prisma.freelanceFaculty.findUnique({
+      where: { id: facultyId },
+    });
+
+    if (!faculty) {
+      return res.status(404).json({
+        success: false,
+        message: "Faculty not found",
+      });
+    }
+
+    // Reuse your manager/admin access pattern if needed (similar to other handlers)
+
+    const where = { facultyId };
+    if (from || to) {
+      where.date = {};
+      if (from) where.date.gte = new Date(from);
+      if (to) where.date.lte = new Date(to);
+    }
+
+    const lectures = await prisma.youtubeLecture.findMany({
+      where,
+      orderBy: { date: "desc" },
+    });
+
+    return res.status(200).json({
+      success: true,
+      lectures,
+      count: lectures.length, // 👈 count for the given range (e.g. "this month")
+    });
+
+  }catch(err){
+    console.error("listYoutubeLecturesForFaculty error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load YouTube lectures for this faculty",
+    });
+  }
+}
+
+// ===============get faculty youtube stats including count==================
+export const getFacultyYoutubeStats=async (req,res)=>{
+  try {
+    const { facultyId } = req.params;
+
+    const [faculty, lectureCount] = await Promise.all([
+      prisma.freelanceFaculty.findUnique({ where: { id: facultyId } }),
+      prisma.youtubeLecture.count({ where: { facultyId } }),
+    ]);
+
+    if (!faculty) {
+      return res.status(404).json({
+        success: false,
+        message: "Faculty not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      facultyId,
+      youtubeLectureCount: lectureCount,
+    });
+  } catch (err) {
+    console.error("getFacultyYoutubeStats error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load YouTube lecture stats",
+    });
+  }
+  }
+
+  // -------------------Delete Faculty Entry-----------------
+  export const deleteDayEntry= async (req,res)=>{
+    try{
+      const {facultyId,dayEntryId}=req.params;
+      const userId=req.user.id;
+
+      // Find the entry with faculty relation
+    const entry = await prisma.dayEntry.findUnique({
+      where: { id: dayEntryId },
+      include: { faculty: true }
+    });
+
+    if (!entry) {
+      return res.status(404).json({ success: false, message: "Entry not found" });
+    }
+
+    // Verify faculty matches
+    if (entry.facultyId !== facultyId) {
+      return res.status(400).json({ success: false, message: "Entry does not belong to this faculty" });
+    }
+
+     // Delete the entry (cascade will handle classes deletion)
+     await prisma.dayEntry.delete({ where: { id: dayEntryId } });
+
+     return res.json({ success: true, message: "Entry deleted successfully" });
+
+    }catch(err){
+      console.log("Something went wrong in deleteDayEntry controller:",err)
+      return res.status(500).json({
+        success:false,
+        error:err
+      })
+    }
+  }

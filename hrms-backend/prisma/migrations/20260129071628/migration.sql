@@ -1,4 +1,4 @@
--- AlterTable
-ALTER TABLE "AttendanceCorrection" ADD COLUMN     "checkIn" TIMESTAMP(3),
-ADD COLUMN     "checkOut" TIMESTAMP(3),
-ADD COLUMN     "witness" TEXT;
+ALTER TABLE "AttendanceCorrection"
+ADD COLUMN IF NOT EXISTS "checkIn" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "checkOut" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "witness" TEXT;
